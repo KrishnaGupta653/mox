@@ -114,43 +114,41 @@ if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
         echo "   - $dep"
     done
     echo ""
-    echo "Please install missing dependencies:"
+    echo "📋 To install missing dependencies, copy and run this command:"
+    echo ""
     
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        echo "  macOS (Homebrew):"
-        echo "    brew install ${MISSING_DEPS[*]}"
+        echo "   brew install ${MISSING_DEPS[*]}"
+        echo ""
+        echo "   (macOS with Homebrew)"
     elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        echo "  Ubuntu/Debian:"
-        echo "    sudo apt update && sudo apt install ${MISSING_DEPS[*]}"
-        echo "  Fedora/RHEL:"
-        echo "    sudo dnf install ${MISSING_DEPS[*]}"
-        echo "  Arch Linux:"
-        echo "    sudo pacman -S ${MISSING_DEPS[*]}"
+        echo "   sudo apt update && sudo apt install ${MISSING_DEPS[*]}"
+        echo ""
+        echo "   (Ubuntu/Debian - or use dnf/pacman for other distros)"
     fi
     echo ""
-    echo "After installing dependencies, run 'mox' to start using the music CLI."
+    echo "After installing dependencies, run 'mox help' to start using the music CLI."
     exit 1
 fi
 
 if [ ${#OPTIONAL_DEPS[@]} -gt 0 ]; then
     echo ""
-    echo "⚠️  Optional dependencies (recommended for full functionality):"
+    echo "💡 Optional dependencies (recommended for full functionality):"
     for dep in "${OPTIONAL_DEPS[@]}"; do
         echo "   - $dep"
     done
     echo ""
-    echo "Install optional dependencies for enhanced features:"
+    echo "📋 For the best experience, also install these optional dependencies:"
+    echo ""
     
     if [[ "$OSTYPE" == "darwin"* ]]; then
-        echo "  macOS (Homebrew):"
-        echo "    brew install ${OPTIONAL_DEPS[*]}"
+        echo "   brew install ${OPTIONAL_DEPS[*]}"
+        echo ""
+        echo "   (Enables YouTube downloads, fuzzy search, terminal images, etc.)"
     elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        echo "  Ubuntu/Debian:"
-        echo "    sudo apt update && sudo apt install ${OPTIONAL_DEPS[*]}"
-        echo "  Fedora/RHEL:"
-        echo "    sudo dnf install ${OPTIONAL_DEPS[*]}"
-        echo "  Arch Linux:"
-        echo "    sudo pacman -S ${OPTIONAL_DEPS[*]}"
+        echo "   sudo apt update && sudo apt install ${OPTIONAL_DEPS[*]}"
+        echo ""
+        echo "   (Enables YouTube downloads, fuzzy search, terminal images, etc.)"
     fi
 fi
 
