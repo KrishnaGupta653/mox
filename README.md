@@ -24,7 +24,7 @@
 
 ### npm (Recommended)
 ```bash
-npm install -g mox
+npm install -g mox-cli
 ```
 
 ### Homebrew (macOS/Linux)
@@ -326,7 +326,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [GitHub Repository](https://github.com/KrishnaGupta653/mox)
 - [Issue Tracker](https://github.com/KrishnaGupta653/mox/issues)
-- [npm Package](https://www.npmjs.com/package/mox)
+- [npm Package](https://www.npmjs.com/package/mox-cli)
 
 ---
 

@@ -48,21 +48,21 @@ git push origin v6.0.0
 # Test package creation
 npm pack
 
-# This creates mox-6.0.0.tgz - inspect it:
-tar -tzf mox-6.0.0.tgz
+# This creates mox-cli-6.0.0.tgz - inspect it:
+tar -tzf mox-cli-6.0.0.tgz
 
 # Test installation locally
-npm install -g ./mox-6.0.0.tgz
+npm install -g ./mox-cli-6.0.0.tgz
 
 # Test the installation
 mox help
 mox --version
 
 # Uninstall test version
-npm uninstall -g mox
+npm uninstall -g mox-cli
 
 # Clean up test tarball
-rm mox-6.0.0.tgz
+rm mox-cli-6.0.0.tgz
 ```
 
 ### Step 4: Publish to npm
@@ -78,12 +78,12 @@ npm whoami
 npm publish
 
 # Verify publication
-npm view mox
+npm view mox-cli
 ```
 
 **✅ npm Publishing Complete!**
-- Users can now install with: `npm install -g mox`
-- Package available at: https://www.npmjs.com/package/mox
+- Users can now install with: `npm install -g mox-cli`
+- Package available at: https://www.npmjs.com/package/mox-cli
 
 ---
 
@@ -216,9 +216,9 @@ debuild
 ### Step 14: Test All Installation Methods
 ```bash
 # Test npm installation
-npm install -g mox
+npm install -g mox-cli
 mox help
-npm uninstall -g mox
+npm uninstall -g mox-cli
 
 # Test Homebrew installation
 brew install KrishnaGupta653/tap/mox
@@ -248,7 +248,7 @@ git push origin main
 
 | Platform | Status | Installation Command | Notes |
 |----------|--------|---------------------|-------|
-| **npm** | ✅ Ready | `npm install -g mox` | Global package manager |
+| **npm** | ✅ Ready | `npm install -g mox-cli` | Global package manager |
 | **Homebrew** | ✅ Ready | `brew install KrishnaGupta653/tap/mox` | macOS/Linux via tap |
 | **Debian** | ✅ Ready | `sudo dpkg -i mox-cli_6.0.0_all.deb` | Manual .deb install |
 
