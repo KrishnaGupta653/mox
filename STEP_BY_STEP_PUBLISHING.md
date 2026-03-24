@@ -92,25 +92,25 @@ npm view mox-cli
 ### Step 5: Get Release Tarball SHA256
 ```bash
 # Get the SHA256 of your GitHub release tarball
-curl -sL https://github.com/KrishnaGupta653/mox/archive/v6.0.0.tar.gz | shasum -a 256
+curl -sL https://github.com/KrishnaGupta653/mox/archive/v6.0.4.tar.gz | shasum -a 256
 
-# Copy the resulting hash (first part before the dash)
+# Copy the resulting hash: 56c5ecd40cd1f929d1a0fe27b1121b183703cf26badce786fd326055d73d5c04
 ```
 
 ### Step 6: Update Homebrew Formula
-```bash
-# Edit the formula file
-nano packaging/homebrew/mox.rb
-
-# Update line 5 with the SHA256 hash:
-# sha256 "YOUR_HASH_HERE"
-```
+The formula is already updated with the correct SHA256 and version.
 
 ### Step 7: Create Homebrew Tap Repository
 ```bash
-# Create a new repository on GitHub named: homebrew-tap
-# Clone it locally
-cd ..  # Go up one directory
+# 1. Create repository on GitHub:
+#    - Go to https://github.com/new
+#    - Name: homebrew-tap
+#    - Description: Homebrew tap for mox - Terminal Music CLI
+#    - Public, with README
+#    - Create repository
+
+# 2. Clone and set up locally
+cd ..  # Go up one directory  
 git clone https://github.com/KrishnaGupta653/homebrew-tap.git
 cd homebrew-tap
 
@@ -122,7 +122,11 @@ cp ../mox/packaging/homebrew/mox.rb Formula/mox.rb
 
 # Commit and push
 git add Formula/mox.rb
-git commit -m "Add mox v6.0.0 formula"
+git commit -m "Add mox v6.0.4 formula
+
+- Terminal music CLI with web UI
+- Fixed symlink handling for npm installations
+- Enhanced dependency installation messages"
 git push origin main
 ```
 
