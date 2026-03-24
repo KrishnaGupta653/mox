@@ -4,7 +4,7 @@
   "description": "Terminal music CLI - A powerful command-line music player with web UI, mpv backend, and extensive features",
   "main": "mox",
   "bin": {
-    "mox": "./mox"
+    "mox": "mox"
   },
   "scripts": {
     "postinstall": "./scripts/install.sh",
