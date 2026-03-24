@@ -1,0 +1,354 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+env:
+  NODE_VERSION: '18'
+  PYTHON_VERSION: '3.8'
+
+jobs:
+  # ============================================================================
+  # SECURITY & LINTING
+  # ============================================================================
+  security:
+    name: Security & Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Install security tools
+        run: |
+          pip install bandit safety
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+      
+      - name: Run Python security scan
+        run: |
+          bandit -r src/ -f json -o bandit-report.json || true
+          bandit -r src/ || exit 0  # Don't fail on warnings
+      
+      - name: Check Python dependencies for vulnerabilities
+        run: |
+          pip freeze | safety check --stdin || exit 0
+      
+      - name: Run shell script linting
+        run: |
+          shellcheck src/mox.sh || exit 0  # Don't fail on warnings
+      
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+
+  # ============================================================================
+  # CROSS-PLATFORM TESTING
+  # ============================================================================
+  test:
+    name: Test Suite
+    needs: security
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+        exclude:
+          # Reduce matrix size - test fewer combinations on macOS
+          - os: macos-latest
+            python-version: '3.9'
+          - os: macos-latest
+            python-version: '3.10'
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      - name: Install system dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq mpv python3-pip zsh
+          # Install yt-dlp
+          pip3 install yt-dlp
+      
+      - name: Install system dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew update
+          brew install curl jq mpv python3 zsh
+          # Install yt-dlp
+          pip3 install yt-dlp
+      
+      - name: Run basic smoke tests
+        run: |
+          chmod +x tests/test.sh
+          ./tests/test.sh
+      
+      - name: Run comprehensive test suite
+        run: |
+          chmod +x tests/test-comprehensive.sh
+          ./tests/test-comprehensive.sh
+      
+      - name: Test installation script
+        run: |
+          chmod +x scripts/install.sh
+          ./scripts/install.sh
+      
+      - name: Test CLI functionality
+        run: |
+          export PATH="$PWD:$PATH"
+          # Test help command
+          timeout 10s ./mox help || true
+          # Test version
+          timeout 5s ./mox --version || true
+
+  # ============================================================================
+  # BUILD & PACKAGE
+  # ============================================================================
+  build:
+    name: Build & Package
+    needs: test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+      
+      - name: Validate package.json
+        run: |
+          npm pkg fix
+          npm run test || true
+      
+      - name: Create distribution package
+        run: |
+          # Create tarball for distribution
+          tar -czf mox-cli.tar.gz \
+            --exclude='.git*' \
+            --exclude='node_modules' \
+            --exclude='*.log' \
+            --exclude='tests/test-comprehensive.sh' \
+            .
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: mox-cli-${{ github.sha }}
+          path: |
+            mox-cli.tar.gz
+            package.json
+            VERSION
+
+  # ============================================================================
+  # HOMEBREW FORMULA GENERATION
+  # ============================================================================
+  homebrew:
+    name: Generate Homebrew Formula
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Generate Homebrew formula
+        run: |
+          VERSION=$(cat VERSION)
+          cat > mox.rb << EOF
+          class Mox < Formula
+            desc "Terminal music CLI with web UI and extensive features"
+            homepage "https://github.com/KrishnaGupta653/mox"
+            url "https://github.com/KrishnaGupta653/mox/archive/v#{VERSION}.tar.gz"
+            license "MIT"
+            
+            depends_on "mpv"
+            depends_on "curl"
+            depends_on "jq"
+            depends_on "python@3.11"
+            depends_on "yt-dlp"
+            
+            def install
+              # Install main files
+              bin.install "mox"
+              libexec.install Dir["src/*"]
+              libexec.install Dir["scripts/*"]
+              
+              # Create wrapper script
+              (bin/"mox").write <<~EOS
+                #!/bin/bash
+                exec "#{libexec}/mox.sh" "$@"
+              EOS
+              
+              # Install documentation
+              doc.install "README.md"
+              doc.install Dir["docs/*"] if Dir.exist?("docs")
+            end
+            
+            test do
+              system "#{bin}/mox", "help"
+            end
+          end
+          EOF
+      
+      - name: Upload Homebrew formula
+        uses: actions/upload-artifact@v3
+        with:
+          name: homebrew-formula
+          path: mox.rb
+
+  # ============================================================================
+  # DEBIAN PACKAGE
+  # ============================================================================
+  debian:
+    name: Build Debian Package
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y devscripts build-essential debhelper
+      
+      - name: Create Debian package structure
+        run: |
+          VERSION=$(cat VERSION)
+          PKG_NAME="mox-cli_${VERSION}_all"
+          
+          mkdir -p "${PKG_NAME}/DEBIAN"
+          mkdir -p "${PKG_NAME}/usr/bin"
+          mkdir -p "${PKG_NAME}/usr/share/mox"
+          mkdir -p "${PKG_NAME}/usr/share/doc/mox-cli"
+          
+          # Control file
+          cat > "${PKG_NAME}/DEBIAN/control" << EOF
+          Package: mox-cli
+          Version: ${VERSION}
+          Section: sound
+          Priority: optional
+          Architecture: all
+          Depends: mpv, curl, jq, python3 (>= 3.6), python3-pip
+          Recommends: yt-dlp, fzf, chafa, ffmpeg
+          Maintainer: Krishna Gupta <krishnagupta653@gmail.com>
+          Description: Terminal music CLI with web UI
+           A powerful command-line music player with web interface,
+           mpv backend, and extensive features including YouTube support,
+           lyrics display, and playlist management.
+          EOF
+          
+          # Install files
+          cp mox "${PKG_NAME}/usr/bin/"
+          cp -r src/* "${PKG_NAME}/usr/share/mox/"
+          cp README.md LICENSE "${PKG_NAME}/usr/share/doc/mox-cli/"
+          
+          # Build package
+          dpkg-deb --build "${PKG_NAME}"
+      
+      - name: Upload Debian package
+        uses: actions/upload-artifact@v3
+        with:
+          name: debian-package
+          path: "*.deb"
+
+  # ============================================================================
+  # NPM PUBLISH
+  # ============================================================================
+  publish-npm:
+    name: Publish to npm
+    needs: [test, build]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+      
+      - name: Update version in package.json
+        run: |
+          VERSION=$(cat VERSION)
+          npm version "$VERSION" --no-git-tag-version
+      
+      - name: Publish to npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # ============================================================================
+  # RELEASE ASSETS
+  # ============================================================================
+  release-assets:
+    name: Upload Release Assets
+    needs: [homebrew, debian]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+      
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            homebrew-formula/mox.rb
+            debian-package/*.deb
+            mox-cli-*/mox-cli.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================================================
+  # DEPLOYMENT NOTIFICATION
+  # ============================================================================
+  notify:
+    name: Deployment Notification
+    needs: [publish-npm, release-assets]
+    runs-on: ubuntu-latest
+    if: always() && github.event_name == 'release'
+    
+    steps:
+      - name: Notify success
+        if: needs.publish-npm.result == 'success' && needs.release-assets.result == 'success'
+        run: |
+          echo "🎉 Successfully released mox CLI!"
+          echo "📦 npm: https://www.npmjs.com/package/mox"
+          echo "🍺 Homebrew formula generated"
+          echo "📋 Debian package created"
+      
+      - name: Notify failure
+        if: needs.publish-npm.result == 'failure' || needs.release-assets.result == 'failure'
+        run: |
+          echo "❌ Release failed!"
+          echo "Check the logs for details."
+          exit 1

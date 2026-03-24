@@ -1,0 +1,7 @@
+#!/bin/bash
+# mox - Terminal Music CLI wrapper script
+# This script provides a convenient way to run mox from the root directory
+
+# More portable way to get script directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec "$SCRIPT_DIR/src/mox.sh" "$@"

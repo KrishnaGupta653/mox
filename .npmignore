@@ -1,0 +1,39 @@
+# Development files
+.git/
+.gitignore
+*.md
+!README.md
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Runtime files
+*.pid
+*.sock
+
+# Test files
+test/
+tests/
+spec/
+
+# Documentation (except README)
+docs/
+doc/
+
+# Homebrew formula (not needed in npm package)
+*.rb
+
+# Build artifacts
+dist/
+build/

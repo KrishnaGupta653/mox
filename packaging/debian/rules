@@ -1,0 +1,63 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	# Install source files
+	install -d debian/mox-cli/usr/share/mox
+	cp -r src/* debian/mox-cli/usr/share/mox/
+	
+	# Create wrapper script for /usr/bin/mox
+	install -d debian/mox-cli/usr/bin
+	cat > debian/mox-cli/usr/bin/mox << 'EOF'
+#!/bin/bash
+# mox - Terminal Music CLI wrapper script for Debian package
+# This script provides a convenient way to run mox from the system installation
+
+exec "/usr/share/mox/mox.sh" "$$@"
+EOF
+	chmod 755 debian/mox-cli/usr/bin/mox
+	
+	# Install scripts
+	install -d debian/mox-cli/usr/share/mox/scripts
+	cp -r scripts/* debian/mox-cli/usr/share/mox/scripts/
+	
+	# Install documentation
+	install -d debian/mox-cli/usr/share/doc/mox-cli
+	cp README.md debian/mox-cli/usr/share/doc/mox-cli/
+	cp LICENSE debian/mox-cli/usr/share/doc/mox-cli/copyright
+	
+	# Install docs if they exist
+	if [ -d docs ]; then \
+		cp -r docs/* debian/mox-cli/usr/share/doc/mox-cli/; \
+	fi
+	
+	# Install man page if it exists
+	if [ -f docs/mox.1 ]; then \
+		install -d debian/mox-cli/usr/share/man/man1; \
+		cp docs/mox.1 debian/mox-cli/usr/share/man/man1/; \
+		gzip -9 debian/mox-cli/usr/share/man/man1/mox.1; \
+	fi
+	
+	# Install shell completions if they exist
+	if [ -d completions ]; then \
+		if [ -f completions/mox.bash ]; then \
+			install -d debian/mox-cli/usr/share/bash-completion/completions; \
+			cp completions/mox.bash debian/mox-cli/usr/share/bash-completion/completions/mox; \
+		fi; \
+		if [ -f completions/_mox ]; then \
+			install -d debian/mox-cli/usr/share/zsh/site-functions; \
+			cp completions/_mox debian/mox-cli/usr/share/zsh/site-functions/; \
+		fi; \
+	fi
+
+override_dh_auto_test:
+	# Run basic tests
+	chmod +x tests/test.sh
+	./tests/test.sh || true
+
+override_dh_installdocs:
+	dh_installdocs README.md
+
+.PHONY: override_dh_auto_install override_dh_auto_test override_dh_installdocs

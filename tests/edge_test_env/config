@@ -1,0 +1,23 @@
+# mox — user config  (uncomment + edit to override defaults)
+# CACHE_TTL=3600
+# HISTORY_MAX=500
+# DEFAULT_VOLUME=80
+# VOLUME_STEP=5
+# SEARCH_RESULTS=20
+# YTDLP_MAX_AGE_DAYS=30
+# YTDLP=/usr/local/bin/yt-dlp
+# MPV=/usr/local/bin/mpv
+# AUDIO_DEVICE_SPEAKERS=coreaudio/BuiltInSpeakerDevice
+# AUDIO_DEVICE_HEADPHONES=coreaudio/BuiltInHeadphoneOutputDevice
+# SCROBBLE_URL=https://api.listenbrainz.org/1/submit-listens
+# LASTFM_API_KEY=your_key_here      # enables real similar-track recommendations
+# YOUTUBE_API_KEY=your_key_here     # v5: enables fast YouTube Data API search (ms vs s)
+# INVIDIOUS_HOST=https://invidious.snopyta.org  # v5: privacy-friendly search alternative
+# LOCAL_MUSIC_DIR=$HOME/Music       # v5: local library root for mox index
+# AUTODJ_ENABLED=0                  # v5: 1 = auto-refill queue from Last.fm when empty
+# LYRICS_ENABLED=1                  # v5: 0 = disable real-time lyrics
+# NOTIFY_ENABLED=0                  # 1 = desktop notification on track change
+# CROSSFADE_SECS=0                  # crossfade duration between tracks (0=off)
+# BAR_REFRESH_MS=500                # progress bar refresh interval
+# M_UPDATE_URL=                     # self-update URL (empty=disabled)
+# M_UPDATE_SHA256=                  # expected SHA256 for self-update

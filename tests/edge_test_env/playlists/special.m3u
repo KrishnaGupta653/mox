@@ -1,0 +1,10 @@
+# Special characters test
+https://192.0.2.1/song with spaces.mp3
+file:///nonexistent/safe/encoded/path.mp3
+https://192.0.2.1/song'with'quotes.mp3
+https://192.0.2.1/song"with"double"quotes.mp3
+https://192.0.2.1/song&with&ampersands.mp3
+https://192.0.2.1/song<with>brackets.mp3
+https://192.0.2.1/song|with|pipes.mp3
+https://192.0.2.1/song;with;semicolons.mp3
+https://192.0.2.1/song\$(with)\$shell\$chars.mp3

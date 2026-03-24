@@ -1,0 +1,23 @@
+mox (6.0.0-1) unstable; urgency=medium
+
+  * New major release 6.0.0
+  * Added package management support for npm and Homebrew
+  * Enhanced dependency validation and error handling
+  * Improved installation script with comprehensive dependency checking
+  * Fixed web UI path resolution for different installation methods
+  * Added comprehensive test suite with 60+ tests
+  * Enhanced security with input validation and rate limiting
+  * Improved documentation and packaging for distribution
+  * See CHANGELOG.md for detailed changes
+
+ -- music-cli-pro <krishnagupta653@gmail.com>  Sun, 23 Mar 2026 16:00:00 +0000
+
+mox (5.0.0-1) unstable; urgency=medium
+
+  * Initial Debian package release
+  * Feature-rich terminal music player
+  * Web UI with real-time sync
+  * YouTube, SoundCloud, and local file support
+  * Lyrics, playlists, and auto-DJ functionality
+
+ -- music-cli-pro <krishnagupta653@gmail.com>  Sat, 22 Mar 2026 12:00:00 +0000

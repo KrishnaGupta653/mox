@@ -1,0 +1,44 @@
+Source: mox-cli
+Section: sound
+Priority: optional
+Maintainer: Krishna Gupta <krishnagupta653@gmail.com>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.0
+Homepage: https://github.com/KrishnaGupta653/mox
+Vcs-Git: https://github.com/KrishnaGupta653/mox.git
+Vcs-Browser: https://github.com/KrishnaGupta653/mox
+Rules-Requires-Root: no
+
+Package: mox-cli
+Architecture: all
+Depends: ${misc:Depends},
+         mpv,
+         curl,
+         jq,
+         python3 (>= 3.6),
+         python3-pip,
+         zsh | bash
+Recommends: yt-dlp,
+           fzf,
+           chafa,
+           ffmpeg,
+           socat
+Suggests: youtube-dl
+Description: Terminal music CLI with web UI and extensive features
+ mox is a powerful command-line music player that provides:
+ .
+  * Multiple audio sources (YouTube, SoundCloud, Bandcamp, local files)
+  * Beautiful web interface with real-time synchronization
+  * Rich terminal interface with progress bars and visualizations
+  * Real-time synced lyrics from lrclib.net
+  * Terminal album art display via chafa
+  * Playlist management and sharing capabilities
+  * Auto-DJ mode with Last.fm recommendations
+  * Bookmark system for saving queue states
+  * Comprehensive listening history with search and export
+  * Fast search using YouTube Data API v3 integration
+  * Advanced audio controls (volume, speed, equalizer, crossfade)
+  * Extensive queue management and manipulation tools
+ .
+ The application uses mpv as its backend for reliable audio playback
+ and supports cross-platform operation on Linux and macOS systems.

@@ -1,0 +1,38 @@
+#!/bin/bash
+# Post-installation script for mox-cli
+
+set -e
+
+case "$1" in
+    configure)
+        echo "🎵 Configuring mox CLI..."
+        
+        # Run installation script if it exists
+        if [ -f /usr/share/mox/scripts/install.sh ]; then
+            /usr/share/mox/scripts/install.sh || true
+        fi
+        
+        echo "✅ mox CLI installation complete!"
+        echo ""
+        echo "Quick start:"
+        echo "  mox help                    # Show help"
+        echo "  mox \"lofi hip hop\"          # Play music"
+        echo "  mox uxi                     # Open web interface"
+        echo ""
+        echo "Configuration:"
+        echo "  ~/.config/mox/config        # Edit configuration"
+        echo ""
+        echo "For more information:"
+        echo "  https://github.com/KrishnaGupta653/mox#readme"
+        ;;
+    
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+    
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

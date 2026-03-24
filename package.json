@@ -1,0 +1,119 @@
+{
+  "name": "mox",
+  "version": "6.0.0",
+  "description": "Terminal music CLI - A powerful command-line music player with web UI, mpv backend, and extensive features",
+  "main": "mox",
+  "bin": {
+    "mox": "./mox"
+  },
+  "scripts": {
+    "postinstall": "./scripts/install.sh",
+    "test": "./tests/test.sh",
+    "test:all": "./tests/run-all-tests.sh",
+    "test:quick": "./tests/run-all-tests.sh --quick",
+    "test:comprehensive": "./tests/test-comprehensive.sh",
+    "test:integration": "./tests/test-integration.sh",
+    "test:commands": "./tests/test-commands.sh",
+    "test:security": "./tests/test-security.sh",
+    "test:performance": "./tests/test-performance.sh",
+    "test:api": "python3 ./tests/test-api.py",
+    "test:edge-cases": "./tests/test-edge-cases.sh",
+    "prepack": "npm run test",
+    "start": "./mox help",
+    "lint": "shellcheck src/mox.sh || true",
+    "security": "npm run test:security"
+  },
+  "keywords": [
+    "music",
+    "cli",
+    "player",
+    "mpv",
+    "terminal",
+    "audio",
+    "youtube",
+    "soundcloud",
+    "bandcamp",
+    "playlist",
+    "lyrics",
+    "web-ui",
+    "music-player",
+    "command-line",
+    "streaming",
+    "audio-player",
+    "music-streaming",
+    "yt-dlp",
+    "media-player"
+  ],
+  "author": {
+    "name": "Krishna Gupta",
+    "email": "krishnagupta653@gmail.com",
+    "url": "https://github.com/KrishnaGupta653"
+  },
+  "contributors": [
+    {
+      "name": "mox community",
+      "url": "https://github.com/KrishnaGupta653/mox/graphs/contributors"
+    }
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KrishnaGupta653/mox.git"
+  },
+  "bugs": {
+    "url": "https://github.com/KrishnaGupta653/mox/issues"
+  },
+  "homepage": "https://github.com/KrishnaGupta653/mox#readme",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/KrishnaGupta653"
+  },
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "preferGlobal": true,
+  "files": [
+    "mox",
+    "src/",
+    "scripts/",
+    "VERSION",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "peerDependencies": {
+    "mpv": "*",
+    "curl": "*",
+    "jq": "*",
+    "python3": ">=3.6"
+  },
+  "peerDependenciesMeta": {
+    "mpv": {
+      "optional": false
+    },
+    "curl": {
+      "optional": false
+    },
+    "jq": {
+      "optional": false
+    },
+    "python3": {
+      "optional": false
+    }
+  }
+}
