@@ -95,25 +95,5 @@
     "test": "tests"
   },
   "dependencies": {},
-  "devDependencies": {},
-  "peerDependencies": {
-    "mpv": "*",
-    "curl": "*",
-    "jq": "*",
-    "python3": ">=3.6"
-  },
-  "peerDependenciesMeta": {
-    "mpv": {
-      "optional": false
-    },
-    "curl": {
-      "optional": false
-    },
-    "jq": {
-      "optional": false
-    },
-    "python3": {
-      "optional": false
-    }
-  }
+  "devDependencies": {}
 }
