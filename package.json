@@ -1,6 +1,6 @@
 {
   "name": "mox-cli",
-  "version": "6.0.7",
+  "version": "6.0.8",
   "description": "Terminal music CLI - A powerful command-line music player with web UI, mpv backend, and extensive features",
   "main": "mox",
   "bin": {
@@ -74,7 +74,8 @@
   },
   "os": [
     "darwin",
-    "linux"
+    "linux",
+    "win32"
   ],
   "cpu": [
     "x64",

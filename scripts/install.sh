@@ -10,13 +10,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "🎵 Installing mox - Terminal Music CLI"
 echo "   Music system directory: $MUSIC_ROOT"
 
-# WSL detection and warning
+# WSL/Windows detection and warning
 if [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
     echo ""
     echo "⚠️  WSL detected: $WSL_DISTRO_NAME"
     echo "   Audio playback may require additional setup:"
     echo "   - Install PulseAudio: sudo apt install pulseaudio"
     echo "   - Or use Windows audio: export PULSE_SERVER=tcp:localhost"
+    echo ""
+elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]] || [[ -n "${WINDIR:-}" ]]; then
+    echo ""
+    echo "⚠️  Windows environment detected"
+    echo "   For best experience, use WSL (Windows Subsystem for Linux):"
+    echo "   - Install WSL: wsl --install"
+    echo "   - Then install mox inside WSL: npm install -g mox-cli"
     echo ""
 fi
 

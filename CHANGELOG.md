@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.8] - 2026-03-25
+
+### Added
+- **WSL Support**: Full Windows Subsystem for Linux compatibility
+- **Cross-platform Detection**: Automatic WSL and Windows environment detection
+- **Audio Configuration**: WSL-specific audio setup guidance and PulseAudio instructions
+- **Windows Compatibility**: Added win32 OS support for WSL installations
+
+### Fixed
+- **Installation Instructions**: WSL-specific dependency installation commands
+- **Error Messages**: Platform-aware error messages and setup guidance
+
 ## [6.0.7] - 2026-03-25
 
 ### Fixed
