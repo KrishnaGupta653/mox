@@ -2398,18 +2398,25 @@ UXI_PORT="${UXI_PORT:-7700}"
 UXI_PID_FILE="$DATA_DIR/uxi_server.pid"
 
 do_uxi() {
-  local script_dir; script_dir="$(cd "$(dirname "$0")" && pwd)"
+  # Get script directory - handle both bash and zsh
+  local script_dir
+  if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  else
+    script_dir="$(cd "$(dirname "$0")" && pwd)"
+  fi
   
-  # For npm installations, also check the parent directory (where mox wrapper is)
-  local npm_dir; npm_dir="$(cd "$(dirname "$0")/.." && pwd)"
-
   # Locate music_ui_server.py
   local server_path=""
   local candidates=(
     "$script_dir/music_ui_server.py"
-    "$npm_dir/src/music_ui_server.py"
     "$MUSIC_ROOT/music_ui_server.py"
   )
+  
+  # If MOX_PACKAGE_DIR is set (from wrapper), use that for npm/package installations
+  if [[ -n "${MOX_PACKAGE_DIR:-}" ]]; then
+    candidates=("$MOX_PACKAGE_DIR/src/music_ui_server.py" "${candidates[@]}")
+  fi
   
   # Handle Homebrew installation path
   if [[ -n "${MOX_LIBEXEC_DIR:-}" ]]; then

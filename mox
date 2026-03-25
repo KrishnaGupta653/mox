@@ -11,4 +11,7 @@ while [ -L "$SOURCE" ]; do
 done
 SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
 
+# Set environment variable so mox.sh knows where the package is installed
+export MOX_PACKAGE_DIR="$SCRIPT_DIR"
+
 exec "$SCRIPT_DIR/src/mox.sh" "$@"
