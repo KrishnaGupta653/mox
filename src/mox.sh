@@ -2399,11 +2399,15 @@ UXI_PID_FILE="$DATA_DIR/uxi_server.pid"
 
 do_uxi() {
   local script_dir; script_dir="$(cd "$(dirname "$0")" && pwd)"
+  
+  # For npm installations, also check the parent directory (where mox wrapper is)
+  local npm_dir; npm_dir="$(cd "$(dirname "$0")/.." && pwd)"
 
   # Locate music_ui_server.py
   local server_path=""
   local candidates=(
     "$script_dir/music_ui_server.py"
+    "$npm_dir/src/music_ui_server.py"
     "$MUSIC_ROOT/music_ui_server.py"
   )
   
