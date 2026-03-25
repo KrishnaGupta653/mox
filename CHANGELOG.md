@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [6.0.7] - 2026-03-25
+
+### Fixed
+- **Homebrew Installation**: Fixed post-install script and file structure for proper Homebrew installation
+- **Path Resolution**: Improved MOX_LIBEXEC_DIR and MOX_PACKAGE_DIR environment variables for Homebrew
+- **File Permissions**: Ensured executable permissions are set correctly during Homebrew install
+
 ## [6.0.6] - 2026-03-25
 
 ### Fixed

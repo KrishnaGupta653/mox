@@ -1,7 +1,7 @@
 class MoxCli < Formula
   desc "Terminal music CLI with web UI and extensive features"
   homepage "https://github.com/KrishnaGupta653/mox"
-  url "https://github.com/KrishnaGupta653/mox/archive/v6.0.5.tar.gz"
+  url "https://github.com/KrishnaGupta653/mox/archive/v6.0.7.tar.gz"
   sha256 "PLACEHOLDER_SHA256"
   license "MIT"
   head "https://github.com/KrishnaGupta653/mox.git", branch: "main"
@@ -16,8 +16,8 @@ class MoxCli < Formula
   depends_on "ffmpeg" => :recommended
 
   def install
-    # Install source files
-    libexec.install Dir["src/*"]
+    # Install source files to libexec/src
+    (libexec/"src").install Dir["src/*"]
     
     # Install scripts
     libexec.install Dir["scripts/*"]
@@ -28,12 +28,17 @@ class MoxCli < Formula
     # Create wrapper script that points to the actual implementation
     (bin/"mox").write <<~EOS
       #!/bin/bash
-      export MOX_INSTALL_DIR="#{libexec}"
-      exec "#{libexec}/mox.sh" "$@"
+      export MOX_LIBEXEC_DIR="#{libexec}"
+      export MOX_PACKAGE_DIR="#{libexec}"
+      exec "#{libexec}/src/mox.sh" "$@"
     EOS
     
     # Make sure it's executable
     chmod 0755, bin/"mox"
+    
+    # Make source files executable
+    chmod 0755, libexec/"src/mox.sh"
+    chmod 0755, libexec/"src/music_ui_server.py"
     
     # Install documentation
     doc.install "README.md"
@@ -51,8 +56,8 @@ class MoxCli < Formula
   end
 
   def post_install
-    # Run installation script
-    system "#{libexec}/install.sh" if File.exist?("#{libexec}/install.sh")
+    # Run installation script (skip if it doesn't exist or fails)
+    system "#{libexec}/install.sh" if File.exist?("#{libexec}/install.sh") rescue nil
     
     puts <<~EOS
       🎵 mox has been installed!
