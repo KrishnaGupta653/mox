@@ -76,6 +76,20 @@ sudo dnf install mpv curl jq python3 zsh yt-dlp fzf chafa ffmpeg
 sudo pacman -S mpv curl jq python zsh yt-dlp fzf chafa ffmpeg
 ```
 
+**WSL (Windows Subsystem for Linux):**
+```bash
+# Install dependencies
+sudo apt update && sudo apt install mpv curl jq python3 zsh yt-dlp fzf chafa ffmpeg
+
+# Audio setup (choose one):
+# Option 1: PulseAudio
+sudo apt install pulseaudio
+pulseaudio --start
+
+# Option 2: Windows audio (experimental)
+export PULSE_SERVER=tcp:localhost
+```
+
 ## 🎯 Quick Start
 
 ```bash

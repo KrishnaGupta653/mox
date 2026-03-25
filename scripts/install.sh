@@ -10,6 +10,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "🎵 Installing mox - Terminal Music CLI"
 echo "   Music system directory: $MUSIC_ROOT"
 
+# WSL detection and warning
+if [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+    echo ""
+    echo "⚠️  WSL detected: $WSL_DISTRO_NAME"
+    echo "   Audio playback may require additional setup:"
+    echo "   - Install PulseAudio: sudo apt install pulseaudio"
+    echo "   - Or use Windows audio: export PULSE_SERVER=tcp:localhost"
+    echo ""
+fi
+
 # Create directory structure
 echo "📁 Creating directory structure..."
 mkdir -p "$MUSIC_ROOT"/{socket,cache,playlists,txts,downloads,data,locks,plugins}
@@ -121,10 +131,14 @@ if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
         echo "   brew install ${MISSING_DEPS[*]}"
         echo ""
         echo "   (macOS with Homebrew)"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    elif [[ "$OSTYPE" == "linux-gnu"* ]] || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
         echo "   sudo apt update && sudo apt install ${MISSING_DEPS[*]}"
         echo ""
-        echo "   (Ubuntu/Debian - or use dnf/pacman for other distros)"
+        if [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+            echo "   (WSL detected - make sure audio is configured)"
+        else
+            echo "   (Ubuntu/Debian - or use dnf/pacman for other distros)"
+        fi
     fi
     echo ""
     echo "After installing dependencies, run 'mox help' to start using the music CLI."
@@ -145,10 +159,14 @@ if [ ${#OPTIONAL_DEPS[@]} -gt 0 ]; then
         echo "   brew install ${OPTIONAL_DEPS[*]}"
         echo ""
         echo "   (Enables YouTube downloads, fuzzy search, terminal images, etc.)"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    elif [[ "$OSTYPE" == "linux-gnu"* ]] || [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
         echo "   sudo apt update && sudo apt install ${OPTIONAL_DEPS[*]}"
         echo ""
-        echo "   (Enables YouTube downloads, fuzzy search, terminal images, etc.)"
+        if [[ -n "${WSL_DISTRO_NAME:-}" ]]; then
+            echo "   (WSL: Enables YouTube downloads, fuzzy search, etc. Audio setup may be needed)"
+        else
+            echo "   (Enables YouTube downloads, fuzzy search, terminal images, etc.)"
+        fi
     fi
 fi
 
