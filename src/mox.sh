@@ -1342,21 +1342,33 @@ do_version() {
     script_dir="$(cd "$(dirname "$0")" && pwd)"
   fi
   
-  # Priority 1: Try package.json if we're in an npm installation
-  local package_json_paths=(
-    "${MOX_LIBEXEC_DIR:-}/package.json"
-    "$script_dir/../package.json"
-    "$script_dir/../../package.json"
-  )
-  
-  for package_file in "${package_json_paths[@]}"; do
-    if [[ -f "$package_file" ]] && command -v jq >/dev/null 2>&1; then
-      version=$(jq -r '.version // empty' "$package_file" 2>/dev/null)
-      [[ -n "$version" && "$version" != "null" ]] && break
+  # Priority 1: Check MOX_PACKAGE_DIR (set by npm wrapper script)
+  if [[ -n "$MOX_PACKAGE_DIR" ]]; then
+    if [[ -f "$MOX_PACKAGE_DIR/package.json" ]] && command -v jq >/dev/null 2>&1; then
+      version=$(jq -r '.version // empty' "$MOX_PACKAGE_DIR/package.json" 2>/dev/null)
     fi
-  done
+    if [[ -z "$version" && -f "$MOX_PACKAGE_DIR/VERSION" ]]; then
+      version=$(cat "$MOX_PACKAGE_DIR/VERSION" 2>/dev/null | tr -d '\n\r')
+    fi
+  fi
   
-  # Priority 2: Try VERSION file
+  # Priority 2: Try package.json if we're in a development environment
+  if [[ -z "$version" ]]; then
+    local package_json_paths=(
+      "${MOX_LIBEXEC_DIR:-}/package.json"
+      "$script_dir/../package.json"
+      "$script_dir/../../package.json"
+    )
+    
+    for package_file in "${package_json_paths[@]}"; do
+      if [[ -f "$package_file" ]] && command -v jq >/dev/null 2>&1; then
+        version=$(jq -r '.version // empty' "$package_file" 2>/dev/null)
+        [[ -n "$version" && "$version" != "null" ]] && break
+      fi
+    done
+  fi
+  
+  # Priority 3: Try VERSION file
   if [[ -z "$version" ]]; then
     local version_paths=(
       "${MOX_LIBEXEC_DIR:-}/VERSION"
@@ -1372,7 +1384,7 @@ do_version() {
     done
   fi
   
-  # Priority 3: Try git tag (development environment)
+  # Priority 4: Try git tag (development environment)
   if [[ -z "$version" ]] && command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
     version=$(git describe --tags --exact-match 2>/dev/null || git describe --tags 2>/dev/null)
   fi
