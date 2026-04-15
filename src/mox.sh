@@ -2050,7 +2050,9 @@ do_playlists() {
   echo ""
   echo "  ${C}saved playlists:${X}"
   local found=0
-  for f in "$PLAYLIST_DIR"/*.m3u(N); do
+  for f in "$PLAYLIST_DIR"/*.m3u; do
+    # Check if glob matched any files (avoid processing literal *.m3u)
+    [ -f "$f" ] || break
     local name; name=$(basename "$f" .m3u)
     local count; count=$(grep -cvE '^\s*(#|$)' "$f" 2>/dev/null || echo 0)
     echo "  ∙ ${W}${name}${X}  (${count} tracks)"
@@ -2105,9 +2107,12 @@ do_dl_list() {
   echo "  ${C}downloads:${X}  $DOWNLOADS_DIR"
   echo ""
   local found=0
-  for f in "$DOWNLOADS_DIR"/*.mp3(N) "$DOWNLOADS_DIR"/*.m4a(N) "$DOWNLOADS_DIR"/*.opus(N); do
-    echo "  ∙ $(basename "$f")"
-    found=1
+  for ext in mp3 m4a opus; do
+    for f in "$DOWNLOADS_DIR"/*.$ext; do
+      [ -f "$f" ] || continue
+      echo "  ∙ $(basename "$f")"
+      found=1
+    done
   done
   [[ $found -eq 0 ]] && echo "  (none yet — use: mox dl \"song name\")"
   echo ""
@@ -2775,7 +2780,10 @@ do_txt() {
   local chosen_file=""
 
   if [ -z "$arg" ]; then
-    local files=("$TXTS_DIR"/*.txt(N))
+    local files=()
+    for f in "$TXTS_DIR"/*.txt; do
+      [ -f "$f" ] && files+=("$f")
+    done
     if [ ${#files[@]} -eq 0 ]; then
       _warn "no .txt files in $TXTS_DIR"
       _info "create one and drop it there — one song name per line"
@@ -3079,7 +3087,8 @@ do_txts() {
   echo ""
   local found=0
   _txt_state_read
-  for f in "$TXTS_DIR"/*.txt(N); do
+  for f in "$TXTS_DIR"/*.txt; do
+    [ -f "$f" ] || break
     local name; name=$(basename "$f" .txt)
     local count; count=$(grep -cvE '^\s*(#|$)' "$f" 2>/dev/null || echo 0)
     if [ "$f" = "$TXT_ACTIVE_FILE" ]; then
@@ -3138,7 +3147,10 @@ do_txtedit() {
   local arg="${1:-}"
   local f
   if [ -z "$arg" ]; then
-    local files=("$TXTS_DIR"/*.txt(N))
+    local files=()
+    for f in "$TXTS_DIR"/*.txt; do
+      [ -f "$f" ] && files+=("$f")
+    done
     [ ${#files[@]} -eq 0 ] && { _err "no txt files in $TXTS_DIR"; return 1; }
     local picked
     picked=$(printf '%s\n' "${files[@]}" | xargs -I{} basename {} .txt | "$FZF" \
@@ -3558,7 +3570,8 @@ do_doctor() {
 
   echo "  ${W}Cache:${X}"
   local cache_total=0 cache_expired=0
-  for f in "$CACHE_DIR"/*.cache(N); do
+  for f in "$CACHE_DIR"/*.cache; do
+    [ -f "$f" ] || continue
     cache_total=$(( cache_total + 1 ))
     [ "$(_cache_age "$f")" -ge "$CACHE_TTL" ] && cache_expired=$(( cache_expired + 1 ))
   done
@@ -3602,7 +3615,8 @@ do_cache_clear() {
 
 do_cache_stats() {
   local total=0 expired=0 fresh=0
-  for f in "$CACHE_DIR"/*.cache(N); do
+  for f in "$CACHE_DIR"/*.cache; do
+    [ -f "$f" ] || continue
     total=$(( total + 1 ))
     if [ "$(_cache_age "$f")" -ge "$CACHE_TTL" ]; then expired=$(( expired + 1 ))
     else fresh=$(( fresh + 1 )); fi
@@ -3614,7 +3628,8 @@ do_cache_stats() {
 
 do_cache_prune() {
   local count=0
-  for f in "$CACHE_DIR"/*.cache(N); do
+  for f in "$CACHE_DIR"/*.cache; do
+    [ -f "$f" ] || continue
     [[ -f "$f" ]] || continue
     if [ "$(_cache_age "$f")" -ge "$CACHE_TTL" ]; then rm -f "$f"; count=$(( count + 1 )); fi
   done
@@ -3634,7 +3649,8 @@ do_devices() {
 # ── Plugin system (v5) ────────────────────────────────────────
 _load_plugins() {
   [[ -d "$PLUGINS_DIR" ]] || return
-  for plugin in "$PLUGINS_DIR"/*.zsh(N); do
+  for plugin in "$PLUGINS_DIR"/*.zsh; do
+    [ -f "$plugin" ] || continue
     source "$plugin" 2>/dev/null && _info "plugin loaded: $(basename "$plugin")" || \
       _warn "plugin error: $(basename "$plugin")"
   done
