@@ -199,19 +199,10 @@ jobs:
           echo "Updated formula for version ${VERSION}"
           echo "SHA256: ${SHA256}"
       
-      - name: Commit and push formula update
+      - name: Prepare formula update (no push to main)
         run: |
           VERSION=$(cat VERSION)
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          
-          if git diff --quiet packaging/homebrew/mox-cli.rb; then
-            echo "No changes to commit"
-          else
-            git add packaging/homebrew/mox-cli.rb
-            git commit -m "chore: update Homebrew formula for v${VERSION}"
-            git push origin HEAD:main
-          fi
+          echo "Formula updated for version ${VERSION} - will be uploaded to Homebrew tap only"
       
       - name: Upload updated Homebrew formula
         uses: actions/upload-artifact@v6
