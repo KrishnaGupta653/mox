@@ -1327,6 +1327,7 @@ do_auto_restart_toggle() {
     _ok "auto-restart enabled — daemon will automatically restart when unresponsive"
   fi
   
+  
   # Reload configuration
   [[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
 }
