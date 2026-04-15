@@ -213,25 +213,31 @@ jobs:
           name: homebrew-formula
           path: packaging/homebrew/mox-cli.rb
           
-      # Uncomment and configure if you have a Homebrew tap repository
-      # - name: Update Homebrew Tap
-      #   if: github.repository_owner == 'KrishnaGupta653'
-      #   run: |
-      #     VERSION=$(cat VERSION)
-      #     
-      #     # Clone your tap repository (create homebrew-tap repo first)
-      #     git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/KrishnaGupta653/homebrew-tap.git tap-repo
-      #     
-      #     # Copy updated formula
-      #     cp packaging/homebrew/mox-cli.rb tap-repo/Formula/mox-cli.rb
-      #     
-      #     # Commit and push to tap
-      #     cd tap-repo
-      #     git config user.email "action@github.com"
-      #     git config user.name "GitHub Action"
-      #     git add Formula/mox-cli.rb
-      #     git commit -m "Update mox-cli to v${VERSION}" || echo "No changes to commit"
-      #     git push
+      - name: Update Homebrew Tap
+        if: github.repository_owner == 'KrishnaGupta653'
+        run: |
+          VERSION=$(cat VERSION)
+          
+          # Clone your tap repository
+          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/KrishnaGupta653/homebrew-tap.git tap-repo
+          
+          # Create Formula directory if it doesn't exist
+          mkdir -p tap-repo/Formula
+          
+          # Copy updated formula
+          cp packaging/homebrew/mox-cli.rb tap-repo/Formula/mox-cli.rb
+          
+          # Commit and push to tap
+          cd tap-repo
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+          git add Formula/mox-cli.rb
+          git commit -m "Update mox-cli to v${VERSION}
+
+          - Auto-updated from main repository
+          - URL: https://github.com/KrishnaGupta653/mox/archive/v${VERSION}.tar.gz
+          - SHA256: $(curl -sL https://github.com/KrishnaGupta653/mox/archive/v${VERSION}.tar.gz | shasum -a 256 | cut -d' ' -f1)" || echo "No changes to commit"
+          git push
 
   # ============================================================================
   # DEBIAN PACKAGE
