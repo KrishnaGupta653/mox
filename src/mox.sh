@@ -87,6 +87,7 @@ INVIDIOUS_HOST=""          # v5-L: optional Invidious instance e.g. "https://inv
 LOCAL_MUSIC_DIR="${HOME}/Music"
 AUTODJ_ENABLED=0           # v5-R: auto-refill queue from Last.fm when empty
 LYRICS_ENABLED=1           # v5-P: enable lrclib.net lyrics fetch
+AUTO_RESTART_DAEMON=true   # v6-A: auto-restart daemon when unresponsive
 NOTIFY_ENABLED=0           # desktop notification on track change
 CROSSFADE_SECS=0           # crossfade duration between tracks (0=off)
 BAR_REFRESH_MS=500         # progress bar refresh interval
@@ -311,6 +312,7 @@ _bootstrap() {
 # LOCAL_MUSIC_DIR=$HOME/Music       # v5: local library root for mox index
 # AUTODJ_ENABLED=0                  # v5: 1 = auto-refill queue from Last.fm when empty
 # LYRICS_ENABLED=1                  # v5: 0 = disable real-time lyrics
+# AUTO_RESTART_DAEMON=true          # v6: false = disable auto-restart when daemon unresponsive
 # NOTIFY_ENABLED=0                  # 1 = desktop notification on track change
 # CROSSFADE_SECS=0                  # crossfade duration between tracks (0=off)
 # BAR_REFRESH_MS=500                # progress bar refresh interval
@@ -454,7 +456,20 @@ _need() {
   fi
   if ! echo '{"command":["get_version"]}' \
         | "$SOCAT" -t 2 - "$SOCKET" >/dev/null 2>&1; then
-    _die 3 "daemon socket exists but mpv is unresponsive — run: mox stop && mox start"
+    # Check if auto-restart is enabled
+    if [[ "${AUTO_RESTART_DAEMON:-true}" == "true" ]]; then
+      _info "daemon unresponsive, attempting auto-restart..."
+      do_stop >/dev/null 2>&1
+      _start
+      if echo '{"command":["get_version"]}' | "$SOCAT" -t 2 - "$SOCKET" >/dev/null 2>&1; then
+        _ok "daemon auto-restarted successfully"
+        return 0
+      else
+        _die 3 "daemon auto-restart failed — please try: mox stop && mox start"
+      fi
+    else
+      _die 3 "daemon socket exists but mpv is unresponsive — run: mox stop && mox start"
+    fi
   fi
 }
 
@@ -1281,6 +1296,39 @@ do_stop() {
 
 do_start() {
   _start && _ok "daemon ready"
+}
+
+do_auto_restart_toggle() {
+  local current_value="${AUTO_RESTART_DAEMON:-true}"
+  
+  if [[ "$current_value" == "true" ]]; then
+    # Disable auto-restart
+    if grep -q "^AUTO_RESTART_DAEMON=" "$CONFIG_FILE" 2>/dev/null; then
+      if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' 's/^AUTO_RESTART_DAEMON=.*/AUTO_RESTART_DAEMON=false/' "$CONFIG_FILE"
+      else
+        sed -i 's/^AUTO_RESTART_DAEMON=.*/AUTO_RESTART_DAEMON=false/' "$CONFIG_FILE"
+      fi
+    else
+      echo "AUTO_RESTART_DAEMON=false" >> "$CONFIG_FILE"
+    fi
+    _ok "auto-restart disabled — daemon will show error message when unresponsive"
+  else
+    # Enable auto-restart
+    if grep -q "^AUTO_RESTART_DAEMON=" "$CONFIG_FILE" 2>/dev/null; then
+      if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' 's/^AUTO_RESTART_DAEMON=.*/AUTO_RESTART_DAEMON=true/' "$CONFIG_FILE"
+      else
+        sed -i 's/^AUTO_RESTART_DAEMON=.*/AUTO_RESTART_DAEMON=true/' "$CONFIG_FILE"
+      fi
+    else
+      echo "AUTO_RESTART_DAEMON=true" >> "$CONFIG_FILE"
+    fi
+    _ok "auto-restart enabled — daemon will automatically restart when unresponsive"
+  fi
+  
+  # Reload configuration
+  [[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
 }
 
 do_vol() {
@@ -3840,7 +3888,7 @@ do_completions() {
 # mox — zsh completion
 _mox_completions() {
   local -a cmds
-  cmds=(pause next prev stop start shuffle repeat repeat-one clear now bar lyrics art ui uxi uxi-stop scrub queue qmove qrm status hp speakers devices playlists save load pldel import dl dl-list txt txts txtnext txtprev txtnow txtpick txtedit txt-export vol seek speed like unlike likes likes-play love similar history history-clear replay eq eq\ custom norm sleep export update doctor queue-restore log log-clear cache-clear cache-prune cache-stats autodj bookmark bookmarks bookmark-load index local reload-config crossfade queue-dedup pin pins queue-save-auto search radio chapter stats config-edit notify-toggle history-stats completions help)
+  cmds=(pause next prev stop start shuffle repeat repeat-one clear now bar lyrics art ui uxi uxi-stop scrub queue qmove qrm status hp speakers devices playlists save load pldel import dl dl-list txt txts txtnext txtprev txtnow txtpick txtedit txt-export vol seek speed like unlike likes likes-play love similar history history-clear replay eq eq\ custom norm sleep export update doctor queue-restore log log-clear cache-clear cache-prune cache-stats autodj bookmark bookmarks bookmark-load index local reload-config crossfade queue-dedup pin pins queue-save-auto search radio chapter stats config-edit notify-toggle auto-restart-toggle history-stats completions help)
   _describe 'mox' cmds
 }
 compdef _mox_completions mox
@@ -3986,6 +4034,7 @@ do_help() {
     config-edit            edit config in \$EDITOR
     reload-config          hot-reload config without restarting daemon
     notify-toggle          toggle desktop notifications on track change
+    auto-restart-toggle    toggle auto-restart when daemon becomes unresponsive
 
   ${W}SHELL${X}
     completions            output zsh completion script
@@ -4077,6 +4126,7 @@ case "$1" in
   stats)               do_stats;                  exit 0 ;;
   config-edit)         do_config_edit;           exit 0 ;;
   notify-toggle)        do_notify_toggle;          exit 0 ;;
+  auto-restart-toggle)  do_auto_restart_toggle;     exit 0 ;;
   history-stats)       do_history_stats;          exit 0 ;;
   completions)         do_completions;            exit 0 ;;
   norm)                do_norm;                    exit 0 ;;
