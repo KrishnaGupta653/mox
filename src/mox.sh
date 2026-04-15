@@ -3649,11 +3649,15 @@ do_devices() {
 # ── Plugin system (v5) ────────────────────────────────────────
 _load_plugins() {
   [[ -d "$PLUGINS_DIR" ]] || return
+  # Set nullglob to avoid warnings when no .zsh files exist
+  setopt nullglob 2>/dev/null || shopt -s nullglob 2>/dev/null
   for plugin in "$PLUGINS_DIR"/*.zsh; do
     [ -f "$plugin" ] || continue
     source "$plugin" 2>/dev/null && _info "plugin loaded: $(basename "$plugin")" || \
       _warn "plugin error: $(basename "$plugin")"
   done
+  # Reset glob behavior
+  unsetopt nullglob 2>/dev/null || shopt -u nullglob 2>/dev/null
 }
 _load_plugins
 
