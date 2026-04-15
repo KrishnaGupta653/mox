@@ -1333,7 +1333,7 @@ do_auto_restart_toggle() {
 }
 
 do_version() {
-  local script_dir version_file version=""
+  local script_dir version=""
   
   # Get the directory containing this script (compatible with both bash and zsh)
   if [[ -n "${BASH_SOURCE:-}" ]]; then
@@ -1342,28 +1342,43 @@ do_version() {
     script_dir="$(cd "$(dirname "$0")" && pwd)"
   fi
   
-  # Try multiple possible locations for VERSION file
-  for possible_version_file in "$script_dir/../VERSION" "$script_dir/../../VERSION" "$PWD/VERSION" "${MOX_LIBEXEC_DIR:-}/VERSION"; do
-    if [[ -f "$possible_version_file" ]]; then
-      version_file="$possible_version_file"
-      break
+  # Priority 1: Try package.json if we're in an npm installation
+  local package_json_paths=(
+    "${MOX_LIBEXEC_DIR:-}/package.json"
+    "$script_dir/../package.json"
+    "$script_dir/../../package.json"
+  )
+  
+  for package_file in "${package_json_paths[@]}"; do
+    if [[ -f "$package_file" ]] && command -v jq >/dev/null 2>&1; then
+      version=$(jq -r '.version // empty' "$package_file" 2>/dev/null)
+      [[ -n "$version" && "$version" != "null" ]] && break
     fi
   done
   
-  # Try to read version from VERSION file
-  if [[ -f "$version_file" ]]; then
-    version=$(cat "$version_file" 2>/dev/null | tr -d '\n\r')
+  # Priority 2: Try VERSION file
+  if [[ -z "$version" ]]; then
+    local version_paths=(
+      "${MOX_LIBEXEC_DIR:-}/VERSION"
+      "$script_dir/../VERSION"
+      "$script_dir/../../VERSION"
+    )
+    
+    for version_file in "${version_paths[@]}"; do
+      if [[ -f "$version_file" ]]; then
+        version=$(cat "$version_file" 2>/dev/null | tr -d '\n\r')
+        [[ -n "$version" ]] && break
+      fi
+    done
   fi
   
-  # Fallback to embedded version or git tag
-  if [[ -z "$version" ]]; then
-    # Try git tag if we're in a git repository
-    if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
-      version=$(git describe --tags --exact-match 2>/dev/null || git describe --tags 2>/dev/null || echo "unknown")
-    else
-      version="6.4.0"  # Fallback version
-    fi
+  # Priority 3: Try git tag (development environment)
+  if [[ -z "$version" ]] && command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
+    version=$(git describe --tags --exact-match 2>/dev/null || git describe --tags 2>/dev/null)
   fi
+  
+  # Fallback
+  [[ -z "$version" ]] && version="unknown"
   
   echo "mox ${version}"
   echo "Terminal music CLI with web UI and extensive features"
