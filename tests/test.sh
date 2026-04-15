@@ -20,10 +20,19 @@ if [[ ! -x "$PROJECT_ROOT/src/mox.sh" ]]; then
 fi
 
 # Test 2: Check syntax of main script
-echo "📝 Checking zsh syntax..."
-if ! zsh -n "$PROJECT_ROOT/src/mox.sh"; then
-    echo "❌ Error: src/mox.sh has syntax errors"
-    exit 1
+echo "📝 Checking shell syntax..."
+if command -v zsh >/dev/null 2>&1; then
+    if ! zsh -n "$PROJECT_ROOT/src/mox.sh"; then
+        echo "❌ Error: src/mox.sh has syntax errors"
+        exit 1
+    fi
+elif command -v bash >/dev/null 2>&1; then
+    if ! bash -n "$PROJECT_ROOT/src/mox.sh"; then
+        echo "❌ Error: src/mox.sh has syntax errors"  
+        exit 1
+    fi
+else
+    echo "⚠️  Warning: No shell available for syntax check, skipping..."
 fi
 
 # Test 3: Check if Python server exists and has valid syntax

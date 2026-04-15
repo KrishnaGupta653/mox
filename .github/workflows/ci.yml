@@ -224,8 +224,8 @@ jobs:
         run: |
           VERSION=$(cat VERSION)
           
-          # Clone your tap repository
-          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/KrishnaGupta653/homebrew-tap.git tap-repo
+          # Clone your tap repository using PAT
+          git clone https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/KrishnaGupta653/homebrew-tap.git tap-repo
           
           # Create Formula directory if it doesn't exist
           mkdir -p tap-repo/Formula
