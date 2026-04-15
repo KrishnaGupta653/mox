@@ -9,6 +9,11 @@ on:
   release:
     types: [ published ]
 
+permissions:
+  contents: write
+  actions: read
+  checks: write
+
 env:
   NODE_VERSION: '18'
   PYTHON_VERSION: '3.8'
@@ -314,11 +319,6 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: 'https://registry.npmjs.org'
-      
-      - name: Update version in package.json
-        run: |
-          VERSION=$(cat VERSION)
-          npm version "$VERSION" --no-git-tag-version
       
       - name: Publish to npm
         run: npm publish
