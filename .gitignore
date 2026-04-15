@@ -175,3 +175,5 @@ music_system/
 # Test artifacts
 test-results/
 test-report-*.txt
+
+update.txt
