@@ -26,22 +26,32 @@ echo "📝 Updating Homebrew formula URL..."
 sed -i.bak "s|archive/v[0-9]\+\.[0-9]\+\.[0-9]\+\.tar\.gz|archive/v$NEW_VERSION.tar.gz|g" packaging/homebrew/mox-cli.rb
 rm -f packaging/homebrew/mox-cli.rb.bak
 
-# 4. Commit changes
-echo "💾 Committing changes..."
-git add VERSION package.json packaging/homebrew/mox-cli.rb
+# 4. Add ALL changes (including your code changes)
+echo "📁 Adding all changes..."
+git add .
+
+# 5. Commit everything
+echo "💾 Committing all changes..."
 git commit -m "bump: version $NEW_VERSION"
 
-# 5. Create and push tag
+# 6. Create tag
 echo "🏷️  Creating tag v$NEW_VERSION..."
 git tag "v$NEW_VERSION"
 
-echo "✅ Ready to release!"
+# 7. Push everything
+echo "🚀 Pushing to GitHub..."
+git push
+echo "🏷️  Pushing tag..."
+git push origin "v$NEW_VERSION"
+
 echo ""
-echo "🚀 To complete the release, run:"
-echo "   git push && git push origin v$NEW_VERSION"
+echo "✅ Release v$NEW_VERSION completed!"
 echo ""
-echo "💡 This will:"
-echo "   ✅ Trigger CI automation"
-echo "   ✅ Update Homebrew formula SHA256"  
-echo "   ✅ Update your Homebrew tap"
-echo "   ✅ Publish to npm (if configured)"
+echo "💡 What happened:"
+echo "   ✅ All changes committed and pushed"
+echo "   ✅ Tag created and pushed" 
+echo "   ✅ CI automation triggered"
+echo "   ✅ Homebrew tap will auto-update"
+echo "   ✅ npm will auto-publish (if configured)"
+echo ""
+echo "🔗 Check progress: https://github.com/KrishnaGupta653/mox/actions"
