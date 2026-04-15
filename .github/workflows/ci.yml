@@ -167,58 +167,71 @@ jobs:
   # HOMEBREW FORMULA GENERATION
   # ============================================================================
   homebrew:
-    name: Generate Homebrew Formula
+    name: Update Homebrew Formula
     needs: build
     runs-on: ubuntu-latest
-    if: github.event_name == 'release'
+    if: startsWith(github.ref, 'refs/tags/v')
     
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Generate Homebrew formula
+      - name: Update Homebrew formula
         run: |
           VERSION=$(cat VERSION)
-          cat > mox.rb << EOF
-          class Mox < Formula
-            desc "Terminal music CLI with web UI and extensive features"
-            homepage "https://github.com/KrishnaGupta653/mox"
-            url "https://github.com/KrishnaGupta653/mox/archive/v#{VERSION}.tar.gz"
-            license "MIT"
-            
-            depends_on "mpv"
-            depends_on "curl"
-            depends_on "jq"
-            depends_on "python@3.11"
-            depends_on "yt-dlp"
-            
-            def install
-              # Install main files
-              bin.install "mox"
-              libexec.install Dir["src/*"]
-              libexec.install Dir["scripts/*"]
-              
-              # Create wrapper script
-              (bin/"mox").write <<~EOS
-                #!/bin/bash
-                exec "#{libexec}/mox.sh" "$@"
-              EOS
-              
-              # Install documentation
-              doc.install "README.md"
-              doc.install Dir["docs/*"] if Dir.exist?("docs")
-            end
-            
-            test do
-              system "#{bin}/mox", "help"
-            end
-          end
-          EOF
+          
+          # Calculate SHA256 for the release tarball
+          TARBALL_URL="https://github.com/KrishnaGupta653/mox/archive/v${VERSION}.tar.gz"
+          SHA256=$(curl -sL "$TARBALL_URL" | shasum -a 256 | cut -d' ' -f1)
+          
+          # Update the existing formula file
+          sed -i "s|archive/v[0-9]\+\.[0-9]\+\.[0-9]\+\.tar\.gz|archive/v${VERSION}.tar.gz|g" packaging/homebrew/mox-cli.rb
+          sed -i "s|sha256 \"[a-f0-9]\{64\}\"|sha256 \"${SHA256}\"|g" packaging/homebrew/mox-cli.rb
+          
+          echo "Updated formula for version ${VERSION}"
+          echo "SHA256: ${SHA256}"
       
-      - name: Upload Homebrew formula
+      - name: Commit and push formula update
+        run: |
+          VERSION=$(cat VERSION)
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          if git diff --quiet packaging/homebrew/mox-cli.rb; then
+            echo "No changes to commit"
+          else
+            git add packaging/homebrew/mox-cli.rb
+            git commit -m "chore: update Homebrew formula for v${VERSION}"
+            git push origin HEAD:main
+          fi
+      
+      - name: Upload updated Homebrew formula
         uses: actions/upload-artifact@v6
         with:
           name: homebrew-formula
-          path: mox.rb
+          path: packaging/homebrew/mox-cli.rb
+          
+      # Uncomment and configure if you have a Homebrew tap repository
+      # - name: Update Homebrew Tap
+      #   if: github.repository_owner == 'KrishnaGupta653'
+      #   run: |
+      #     VERSION=$(cat VERSION)
+      #     
+      #     # Clone your tap repository (create homebrew-tap repo first)
+      #     git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/KrishnaGupta653/homebrew-tap.git tap-repo
+      #     
+      #     # Copy updated formula
+      #     cp packaging/homebrew/mox-cli.rb tap-repo/Formula/mox-cli.rb
+      #     
+      #     # Commit and push to tap
+      #     cd tap-repo
+      #     git config user.email "action@github.com"
+      #     git config user.name "GitHub Action"
+      #     git add Formula/mox-cli.rb
+      #     git commit -m "Update mox-cli to v${VERSION}" || echo "No changes to commit"
+      #     git push
 
   # ============================================================================
   # DEBIAN PACKAGE
