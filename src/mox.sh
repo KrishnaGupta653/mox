@@ -1331,6 +1331,44 @@ do_auto_restart_toggle() {
   [[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
 }
 
+do_version() {
+  local script_dir version_file version=""
+  
+  # Get the directory containing this script (compatible with both bash and zsh)
+  if [[ -n "${BASH_SOURCE:-}" ]]; then
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  else
+    script_dir="$(cd "$(dirname "$0")" && pwd)"
+  fi
+  
+  # Try multiple possible locations for VERSION file
+  for possible_version_file in "$script_dir/../VERSION" "$script_dir/../../VERSION" "$PWD/VERSION" "${MOX_LIBEXEC_DIR:-}/VERSION"; do
+    if [[ -f "$possible_version_file" ]]; then
+      version_file="$possible_version_file"
+      break
+    fi
+  done
+  
+  # Try to read version from VERSION file
+  if [[ -f "$version_file" ]]; then
+    version=$(cat "$version_file" 2>/dev/null | tr -d '\n\r')
+  fi
+  
+  # Fallback to embedded version or git tag
+  if [[ -z "$version" ]]; then
+    # Try git tag if we're in a git repository
+    if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
+      version=$(git describe --tags --exact-match 2>/dev/null || git describe --tags 2>/dev/null || echo "unknown")
+    else
+      version="6.4.0"  # Fallback version
+    fi
+  fi
+  
+  echo "mox ${version}"
+  echo "Terminal music CLI with web UI and extensive features"
+  echo "Homepage: https://github.com/KrishnaGupta653/mox"
+}
+
 do_vol() {
   # Validate input first, before checking daemon
   case "${1:-}" in
@@ -3888,7 +3926,7 @@ do_completions() {
 # mox — zsh completion
 _mox_completions() {
   local -a cmds
-  cmds=(pause next prev stop start shuffle repeat repeat-one clear now bar lyrics art ui uxi uxi-stop scrub queue qmove qrm status hp speakers devices playlists save load pldel import dl dl-list txt txts txtnext txtprev txtnow txtpick txtedit txt-export vol seek speed like unlike likes likes-play love similar history history-clear replay eq eq\ custom norm sleep export update doctor queue-restore log log-clear cache-clear cache-prune cache-stats autodj bookmark bookmarks bookmark-load index local reload-config crossfade queue-dedup pin pins queue-save-auto search radio chapter stats config-edit notify-toggle auto-restart-toggle history-stats completions help)
+  cmds=(pause next prev stop start shuffle repeat repeat-one clear now bar lyrics art ui uxi uxi-stop scrub queue qmove qrm status hp speakers devices playlists save load pldel import dl dl-list txt txts txtnext txtprev txtnow txtpick txtedit txt-export vol seek speed like unlike likes likes-play love similar history history-clear replay eq eq\ custom norm sleep export update doctor queue-restore log log-clear cache-clear cache-prune cache-stats autodj bookmark bookmarks bookmark-load index local reload-config crossfade queue-dedup pin pins queue-save-auto search radio chapter stats config-edit notify-toggle auto-restart-toggle history-stats completions help version)
   _describe 'mox' cmds
 }
 compdef _mox_completions mox
@@ -4039,6 +4077,10 @@ do_help() {
   ${W}SHELL${X}
     completions            output zsh completion script
 
+  ${W}VERSION & INFO${X}
+    version / --version    show version information
+    help                   show this help message
+
   ${W}UPDATES & DIAGNOSTICS${X}
     update                 update yt-dlp
     doctor                 full diagnostics: deps, API keys, IPC, locks, cache
@@ -4063,6 +4105,7 @@ _check_ytdlp_age
 [ $# -eq 0 ] && { do_status; exit 0; }
 
 case "$1" in
+  --version|-V|version) do_version;                   exit 0 ;;
   pause|pp)            do_pause;                   exit 0 ;;
   next|mn)             do_next;                    exit 0 ;;
   prev|mb)             do_prev;                    exit 0 ;;
