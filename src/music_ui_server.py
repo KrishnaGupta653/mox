@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import socket
 import socketserver
 import ssl
@@ -27,6 +28,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
+from collections import OrderedDict, deque
 
 # Configure logging
 def _setup_logging():
@@ -91,6 +93,9 @@ if not MUSIC_ROOT:
 
 SOCKET_PATH = os.path.join(MUSIC_ROOT, "socket", "mpv.sock")
 HTML_DIR = os.path.dirname(os.path.abspath(__file__))
+CSRF_TOKEN = secrets.token_urlsafe(32)
+UXI_AUTH_ENABLED = os.environ.get("UXI_AUTH") == "1"
+UXI_AUTH_PIN = f"{secrets.randbelow(1000000):06d}" if UXI_AUTH_ENABLED else ""
 
 # Validate port number
 try:
@@ -99,8 +104,15 @@ try:
         print("❌ Error: Port must be between 1024-65535", file=sys.stderr)
         sys.exit(1)
 except (ValueError, IndexError):
-    print("❌ Error: Invalid port number", file=sys.stderr)
-    sys.exit(1)
+    if os.environ.get('MOX_TEST_MODE'):
+        PORT = 7700
+    else:
+        print("❌ Error: Invalid port number", file=sys.stderr)
+        sys.exit(1)
+
+
+def _allowed_origin():
+    return f"http://127.0.0.1:{PORT}"
 
 # ── dependency and environment checks ─────────────────────────────────────────
 def check_dependencies():
@@ -110,18 +122,6 @@ def check_dependencies():
     # Check Python version
     if sys.version_info < (3, 6):
         errors.append("Python 3.6 or higher is required")
-    
-    # Check required system commands
-    required_commands = ['mpv', 'curl', 'jq']
-    for cmd in required_commands:
-        try:
-            subprocess.run([cmd, '--version'], 
-                         stdout=subprocess.DEVNULL, 
-                         stderr=subprocess.DEVNULL, 
-                         check=True, 
-                         timeout=5)
-        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
-            errors.append(f"Required command not found or not working: {cmd}")
     
     # Check if music system directory exists
     if not os.path.exists(MUSIC_ROOT):
@@ -170,6 +170,9 @@ if not os.environ.get('MOX_TEST_MODE'):
 
 _mpv_request_id = 0
 _mpv_request_id_lock = threading.Lock()
+_mpv_persistent_lock = threading.Lock()
+_mpv_persistent_sock = None
+_mpv_persistent_buf = b""
 
 
 def _next_request_id():
@@ -265,6 +268,75 @@ def mpv_get(prop):
     return resp.get("data")
 
 
+def mpv_get_batch(props):
+    """
+    Get multiple mpv properties in a single socket session.
+    Returns a dict {prop: value}. Missing/errored props map to None.
+    """
+    if not props:
+        return {}
+    if not os.path.exists(SOCKET_PATH):
+        return {p: None for p in props}
+
+    global _mpv_persistent_sock, _mpv_persistent_buf
+    results = {}
+    req_id_to_prop = {}
+
+    try:
+        with _mpv_persistent_lock:
+            if _mpv_persistent_sock is None:
+                _mpv_persistent_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                _mpv_persistent_sock.settimeout(5)
+                _mpv_persistent_sock.connect(SOCKET_PATH)
+            sock = _mpv_persistent_sock
+
+            # Send all requests back-to-back without waiting for responses.
+            for prop in props:
+                req_id = _next_request_id()
+                req_id_to_prop[req_id] = prop
+                payload = json.dumps({"command": ["get_property", prop], "request_id": req_id}) + "\n"
+                sock.sendall(payload.encode("utf-8"))
+
+            deadline = time.time() + 5
+            while len(results) < len(props) and time.time() < deadline:
+                try:
+                    chunk = sock.recv(4096)
+                    if not chunk:
+                        break
+                    _mpv_persistent_buf += chunk
+                    while b"\n" in _mpv_persistent_buf:
+                        line, _mpv_persistent_buf = _mpv_persistent_buf.split(b"\n", 1)
+                        if not line.strip():
+                            continue
+                        try:
+                            obj = json.loads(line.decode("utf-8"))
+                        except (json.JSONDecodeError, UnicodeDecodeError):
+                            continue
+                        rid = obj.get("request_id")
+                        if rid in req_id_to_prop:
+                            prop_name = req_id_to_prop[rid]
+                            err = obj.get("error")
+                            results[prop_name] = obj.get("data") if err in ("success", None) else None
+                except socket.timeout:
+                    break
+    except (socket.error, OSError, ConnectionRefusedError) as e:
+        logger.error(f"MPV batch get error: {e}")
+        with _mpv_persistent_lock:
+            try:
+                if _mpv_persistent_sock:
+                    _mpv_persistent_sock.close()
+            except Exception:
+                pass
+            _mpv_persistent_sock = None
+            _mpv_persistent_buf = b""
+
+    # Fill in any props that got no response
+    for p in props:
+        if p not in results:
+            results[p] = None
+    return results
+
+
 def mpv_set(prop, value):
     resp = mpv_command(["set_property", prop, value])
     return resp
@@ -276,11 +348,26 @@ def mpv_alive():
 
 # ── Lyrics cache ─────────────────────────────────────────────────────────────
 
-_lyrics_cache = {}  # {title: {"synced": bool, "lines": [...]} or sentinel}
+_LYRICS_CACHE_MAX = 50
+_lyrics_cache = OrderedDict()  # {title: result} — bounded to _LYRICS_CACHE_MAX entries
 _lyrics_lock = threading.Lock()
 
 LYRICS_LOADING = "loading"      # fetch in progress
 LYRICS_NOT_FOUND = "not_found"  # fetch completed, nothing found
+
+
+def _lyrics_cache_set(title, value):
+    """Insert/update a lyrics cache entry, evicting the least recently used."""
+    _lyrics_cache.pop(title, None)
+    _lyrics_cache[title] = value
+    _lyrics_cache.move_to_end(title)
+    while len(_lyrics_cache) > _LYRICS_CACHE_MAX:
+        oldest, _ = _lyrics_cache.popitem(last=False)
+        _lyrics_retry_count.pop(oldest, None)
+
+
+def _lyrics_cache_pop(title):
+    _lyrics_cache.pop(title, None)
 
 
 def _parse_lrc(lrc_text):
@@ -389,6 +476,7 @@ def fetch_lyrics(title):
     """
     with _lyrics_lock:
         if title in _lyrics_cache:
+            _lyrics_cache.move_to_end(title)
             return _lyrics_cache[title]
 
     if not title:
@@ -433,7 +521,7 @@ def fetch_lyrics(title):
         }
 
     with _lyrics_lock:
-        _lyrics_cache[title] = result
+        _lyrics_cache_set(title, result)
     return result
 
 
@@ -441,6 +529,7 @@ def get_lyrics_cached(title):
     """Return cached lyrics for title, or LYRICS_LOADING sentinel. Never blocks."""
     with _lyrics_lock:
         if title in _lyrics_cache:
+            _lyrics_cache.move_to_end(title)
             return _lyrics_cache[title]
     return LYRICS_LOADING
 
@@ -452,27 +541,38 @@ _lyrics_retry_count = {}  # {title: int} — how many retries for LYRICS_NOT_FOU
 
 
 def _lyrics_bg_fetch():
-    """Runs in background thread — prefetches lyrics when track changes."""
+    """Runs in background thread — prefetches lyrics when track changes.
+    Only polls mpv when the SSE state indicates something is playing,
+    avoiding wasted socket connections when idle."""
     global _last_lyrics_title
     while True:
         try:
-            if mpv_alive():
-                title = mpv_get("media-title") or ""
-                if title:
+            # Only open a socket if mpv is alive and something is playing.
+            # Use the cached state from the SSE poll loop to avoid an extra
+            # socket connection every 3 s when idle.
+            if mpv_alive() and _last_state_json:
+                try:
+                    cached_state = json.loads(_last_state_json)
+                    title = cached_state.get("title", "")
+                    is_playing = cached_state.get("playing", False)
+                except (json.JSONDecodeError, TypeError):
+                    title = ""
+                    is_playing = False
+
+                if is_playing and title and title != "nothing playing":
                     cached = get_lyrics_cached(title)
                     title_changed = (title != _last_lyrics_title)
-                    # Retry if not_found and we haven't retried too many times
                     retries = _lyrics_retry_count.get(title, 0)
                     should_retry = (cached == LYRICS_NOT_FOUND and retries < 3)
                     if title_changed or should_retry:
                         if title_changed:
                             with _lyrics_lock:
-                                _lyrics_cache.pop(title, None)
+                                _lyrics_cache_pop(title)
                             _lyrics_retry_count[title] = 0
                         else:
                             _lyrics_retry_count[title] = retries + 1
                             with _lyrics_lock:
-                                _lyrics_cache.pop(title, None)
+                                _lyrics_cache_pop(title)
                         _last_lyrics_title = title
                         fetch_lyrics(title)
         except Exception:
@@ -485,9 +585,10 @@ threading.Thread(target=_lyrics_bg_fetch, daemon=True).start()
 
 # ── Build full state (never blocks on lyrics) ─────────────────────────────────
 
-def get_full_state():
+def _fetch_full_state():
     """
     Return a dict with the full player state for the UI.
+    Uses a single socket session to fetch all mpv properties (batch).
     Lyrics: returns cached value or LYRICS_LOADING — never blocks on fetch.
     """
     if not mpv_alive():
@@ -499,23 +600,31 @@ def get_full_state():
             "lyrics": None,
         }
 
-    title = mpv_get("media-title") or ""
-    pos = mpv_get("time-pos") or 0
-    dur = mpv_get("duration") or 0
-    paused = mpv_get("pause")
-    volume = mpv_get("volume") or 80
-    speed = mpv_get("speed") or 1.0
-    loop_playlist = mpv_get("loop-playlist") or "no"
-    loop_file = mpv_get("loop-file") or "no"
-    playlist_pos = mpv_get("playlist-playing-pos")
+    # Fetch all properties in one socket session.
+    props = mpv_get_batch([
+        "media-title", "time-pos", "duration", "pause",
+        "volume", "speed", "loop-playlist", "loop-file", "playlist-playing-pos",
+        "playlist",
+    ])
 
-    pl_resp = mpv_command(["get_property", "playlist"])
-    pl_data = pl_resp.get("data", []) if isinstance(pl_resp, dict) else []
+    title        = props.get("media-title") or ""
+    pos          = props.get("time-pos") or 0
+    dur          = props.get("duration") or 0
+    paused       = props.get("pause")
+    volume       = props.get("volume") or 80
+    speed        = props.get("speed") or 1.0
+    loop_playlist = props.get("loop-playlist") or "no"
+    loop_file    = props.get("loop-file") or "no"
+    playlist_pos = props.get("playlist-playing-pos")
+
+    pl_data = props.get("playlist") or []
+    if not isinstance(pl_data, list):
+        pl_data = []
 
     queue = []
-    for i, item in enumerate(pl_data):
+    for item in pl_data:
         t = item.get("title") or item.get("filename", "")
-        queue.append({"title": t, "current": item.get("current", False)})
+        queue.append({"title": t, "url": item.get("filename", ""), "current": item.get("current", False)})
 
     try:
         pos = float(pos)
@@ -567,18 +676,45 @@ def get_full_state():
     }
 
 
+class MpvStateCache:
+    def __init__(self, ttl=0.25):
+        self._state = None
+        self._expires_at = 0
+        self._ttl = ttl
+        self._lock = threading.Lock()
+
+    def invalidate(self):
+        with self._lock:
+            self._expires_at = 0
+
+    def get(self):
+        now = time.monotonic()
+        with self._lock:
+            if self._state is None or now >= self._expires_at:
+                self._state = _fetch_full_state()
+                self._expires_at = now + self._ttl
+            return dict(self._state)
+
+
+_state_cache = MpvStateCache()
+
+
+def get_full_state():
+    return _state_cache.get()
+
+
 # ── Command whitelist and rate limiting ──────────────────────────────────────
 
 ALLOWED_CMD_ACTIONS = frozenset([
     "pause", "pp", "next", "mn", "prev", "mb", "stop", "seek", "vol", "volume",
     "speed", "repeat", "rp", "repeat-one", "ro", "shuffle", "playlist-play-index",
-    "clear", "norm", "like", "autodj", "eq", "play", "add", "mox", "qrm",
+    "clear", "norm", "like", "autodj", "eq", "play", "add", "mox", "qrm", "qmove",
 ])
 
 RATE_LIMIT_REQUESTS = 10
 RATE_LIMIT_WINDOW = 1.0  # seconds
 
-_cmd_timestamps = []
+_cmd_timestamps = deque()
 _cmd_timestamps_lock = threading.Lock()
 
 
@@ -586,11 +722,33 @@ def _check_rate_limit():
     """Return True if request is allowed, False if rate limited."""
     now = time.monotonic()
     with _cmd_timestamps_lock:
-        _cmd_timestamps[:] = [t for t in _cmd_timestamps if now - t < RATE_LIMIT_WINDOW]
+        while _cmd_timestamps and now - _cmd_timestamps[0] >= RATE_LIMIT_WINDOW:
+            _cmd_timestamps.popleft()
         if len(_cmd_timestamps) >= RATE_LIMIT_REQUESTS:
             return False
         _cmd_timestamps.append(now)
     return True
+
+
+BLOCKED_QUERY_PATTERNS = (
+    r'[;&|`$]',     # shell metacharacters
+    r'\.\./',       # path traversal
+    r'<[^>]+>',     # HTML tags
+    r'javascript:', # JS injection
+    r'data:',       # data URIs
+    r'\x00',        # null bytes
+)
+
+
+def _validate_query(query):
+    if not isinstance(query, str) or not query.strip():
+        return False, "empty query"
+    if len(query) > 500:
+        return False, "query too long"
+    for pattern in BLOCKED_QUERY_PATTERNS:
+        if re.search(pattern, query, re.IGNORECASE):
+            return False, "invalid characters in query"
+    return True, None
 
 
 def _validate_cmd(cmd_str):
@@ -603,15 +761,11 @@ def _validate_cmd(cmd_str):
     if len(cmd_str) > 200:
         return False, "command too long"
     
-    # Comprehensive injection protection
-    dangerous_chars = ['&', '|', ';', '`', '$', '(', ')', '{', '}', '[', ']', 
-                      '<', '>', '"', "'", '\\', '\n', '\r', '\t']
-    if any(char in cmd_str for char in dangerous_chars):
-        return False, "invalid characters in command"
-    
-    # Only allow alphanumeric, spaces, hyphens, plus/minus, dots, colons
-    import re
-    if not re.match(r'^[a-zA-Z0-9\s\-+.:]+$', cmd_str):
+    # Block shell injection metacharacters and control characters.
+    # Using a blocklist (not allowlist) so non-ASCII arguments (e.g. song titles
+    # with accented or CJK characters) are not rejected.
+    BLOCKED_CMD_CHARS = set('&|;`$(){}[]<>"\'\\\n\r\t\x00')
+    if any(ch in BLOCKED_CMD_CHARS for ch in cmd_str):
         return False, "invalid characters in command"
     
     parts = cmd_str.split()
@@ -795,31 +949,100 @@ def handle_cmd(cmd_str):
     return {"ok": False, "msg": f"unknown command: {action}"}
 
 
-# ── SSE: state change notifications ───────────────────────────────────────────
+# ── SSE: connection state machine ─────────────────────────────────────────────
+#
+# Each SSE connection moves through these states:
+#
+#   CONNECTING  → connection accepted, headers sent, initial state not yet delivered
+#   SSE_ACTIVE  → initial state delivered, client is receiving broadcasts
+#   SSE_FAILED  → write error detected; connection is being torn down
+#   POLLING     → client has fallen back to HTTP polling (no SSE connection)
+#
+# The server tracks every live SSE connection as an _SseClient object.
+# _sse_poll_loop broadcasts to all SSE_ACTIVE clients; FAILED ones are pruned.
 
-_sse_clients = []
+class _SseState:
+    CONNECTING = "CONNECTING"
+    SSE_ACTIVE  = "SSE_ACTIVE"
+    SSE_FAILED  = "SSE_FAILED"
+    POLLING     = "POLLING"
+
+
+class _SseClient:
+    """Represents one live SSE connection with its state machine."""
+    __slots__ = ("wfile", "state", "connected_at")
+
+    def __init__(self, wfile):
+        self.wfile = wfile
+        self.state = _SseState.CONNECTING
+        self.connected_at = time.monotonic()
+
+    def activate(self):
+        """Transition CONNECTING → SSE_ACTIVE after initial state is delivered."""
+        if self.state == _SseState.CONNECTING:
+            self.state = _SseState.SSE_ACTIVE
+
+    def fail(self):
+        """Transition any state → SSE_FAILED on write error."""
+        self.state = _SseState.SSE_FAILED
+
+    def is_active(self):
+        return self.state == _SseState.SSE_ACTIVE
+
+    def send(self, msg_bytes):
+        """Write bytes; transitions to SSE_FAILED on any I/O error."""
+        try:
+            self.wfile.write(msg_bytes)
+            self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, OSError):
+            self.fail()
+            raise
+
+
+# Registry of live SSE connections (keyed by id(wfile) for O(1) lookup).
+_sse_clients: list[_SseClient] = []
 _sse_clients_lock = threading.Lock()
 _last_state_json = None
 _state_poll_interval = 0.5
 
 
+def _sse_register(client: _SseClient):
+    with _sse_clients_lock:
+        _sse_clients.append(client)
+
+
+def _sse_unregister(client: _SseClient):
+    client.fail()
+    with _sse_clients_lock:
+        try:
+            _sse_clients.remove(client)
+        except ValueError:
+            pass
+
+
 def _sse_broadcast(data):
-    """Send JSON to all connected SSE clients."""
-    msg = f"data: {json.dumps(data)}\n\n"
+    """Send JSON to all SSE_ACTIVE clients; prune failed ones."""
+    msg = f"data: {json.dumps(data)}\n\n".encode()
     with _sse_clients_lock:
         dead = []
-        for wfile in _sse_clients:
+        for client in _sse_clients:
+            if not client.is_active():
+                if client.state == _SseState.SSE_FAILED:
+                    dead.append(client)
+                continue
             try:
-                wfile.write(msg.encode())
-                wfile.flush()
-            except (BrokenPipeError, ConnectionResetError, OSError):
-                dead.append(wfile)
-        for w in dead:
-            _sse_clients.remove(w)
+                client.send(msg)
+            except OSError:
+                dead.append(client)
+        for c in dead:
+            try:
+                _sse_clients.remove(c)
+            except ValueError:
+                pass
 
 
 def _sse_poll_loop():
-    """Background thread: poll state, broadcast on change."""
+    """Background thread: poll mpv state, broadcast on change to SSE_ACTIVE clients."""
     global _last_state_json
     while True:
         try:
@@ -860,6 +1083,36 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
         except Exception:
             pass  # Connection might be closed
 
+    def _csrf_enabled(self):
+        return not os.environ.get("MOX_TEST_MODE")
+
+    def _read_cookie(self, name):
+        cookie_header = self.headers.get("Cookie", "")
+        for part in cookie_header.split(";"):
+            if "=" not in part:
+                continue
+            key, value = part.strip().split("=", 1)
+            if key == name:
+                return value
+        return None
+
+    def _validate_csrf(self):
+        if not self._csrf_enabled():
+            return True
+        header_token = self.headers.get("X-Mox-Token", "")
+        cookie_token = self._read_cookie("mox_token")
+        return (
+            header_token
+            and cookie_token
+            and secrets.compare_digest(header_token, CSRF_TOKEN)
+            and secrets.compare_digest(cookie_token, CSRF_TOKEN)
+        )
+
+    def _validate_auth(self):
+        if not UXI_AUTH_ENABLED or os.environ.get("MOX_TEST_MODE"):
+            return True
+        return secrets.compare_digest(self._read_cookie("mox_auth") or "", CSRF_TOKEN)
+
     def do_GET(self):
         try:
             parsed = urllib.parse.urlparse(self.path)
@@ -875,6 +1128,8 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
                 self._serve_html()
             elif path == "/api/state":
                 self._json_response(get_full_state())
+            elif path == "/api/auth":
+                self._json_response({"authRequired": UXI_AUTH_ENABLED, "authenticated": self._validate_auth()})
             elif path == "/api/events":
                 self._serve_sse()
             else:
@@ -884,45 +1139,44 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             self.handle_exception(e)
 
     def _serve_sse(self):
-        """Serve Server-Sent Events stream."""
+        """Serve Server-Sent Events stream using the _SseClient state machine."""
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", _allowed_origin())
         self.send_header("X-Accel-Buffering", "no")
         self.end_headers()
 
-        with _sse_clients_lock:
-            _sse_clients.append(self.wfile)
+        # CONNECTING: connection accepted, headers sent
+        client = _SseClient(self.wfile)
+        _sse_register(client)
 
-        # Send initial state immediately so client doesn't wait for first change
+        # CONNECTING → SSE_ACTIVE: deliver initial state immediately
         try:
             state = get_full_state()
-            self.wfile.write(f"data: {json.dumps(state)}\n\n".encode())
-            self.wfile.flush()
-        except (BrokenPipeError, ConnectionResetError, OSError):
-            with _sse_clients_lock:
-                if self.wfile in _sse_clients:
-                    _sse_clients.remove(self.wfile)
+            client.send(f"data: {json.dumps(state)}\n\n".encode())
+            client.activate()   # state: SSE_ACTIVE
+        except OSError:
+            # CONNECTING → SSE_FAILED: client disconnected before first byte
+            _sse_unregister(client)
             return
 
+        # SSE_ACTIVE: keep connection open; _sse_poll_loop handles broadcasts.
+        # This thread only sends keepalive pings and detects disconnects.
         try:
-            # Keep connection open; client may disconnect
-            while True:
+            while client.is_active():
                 time.sleep(30)
-                # Send keepalive comment
                 try:
-                    self.wfile.write(b": keepalive\n\n")
-                    self.wfile.flush()
-                except (BrokenPipeError, ConnectionResetError, OSError):
+                    client.send(b": keepalive\n\n")
+                except OSError:
+                    # SSE_ACTIVE → SSE_FAILED
                     break
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
         finally:
-            with _sse_clients_lock:
-                if self.wfile in _sse_clients:
-                    _sse_clients.remove(self.wfile)
+            # SSE_FAILED: unregister and let client fall back to POLLING
+            _sse_unregister(client)
 
     def do_POST(self):
         try:
@@ -935,7 +1189,16 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
                 self.send_error(400, "Bad request")
                 return
 
-            if path == "/api/cmd":
+            if not self._validate_csrf():
+                logger.warning(f"CSRF validation failed for {self.address_string()}")
+                self._json_response({"ok": False, "msg": "invalid session token"}, 403)
+                return
+
+            if path == "/api/auth":
+                self._handle_auth_request()
+            elif not self._validate_auth():
+                self._json_response({"ok": False, "msg": "PIN required"}, 401)
+            elif path == "/api/cmd":
                 self._handle_cmd_request()
             elif path == "/api/play":
                 self._handle_play_request()
@@ -944,6 +1207,22 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
                 self.send_error(404)
         except Exception as e:
             self.handle_exception(e)
+
+    def _handle_auth_request(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length).decode(errors="replace") if length else "{}"
+        try:
+            data = json.loads(body)
+        except json.JSONDecodeError:
+            self._json_response({"ok": False, "msg": "invalid JSON"}, 400)
+            return
+        pin = str(data.get("pin", ""))
+        if UXI_AUTH_ENABLED and secrets.compare_digest(pin, UXI_AUTH_PIN):
+            self._json_response({"ok": True, "msg": "authenticated"}, headers={"Set-Cookie": f"mox_auth={CSRF_TOKEN}; Path=/; SameSite=Strict"})
+        elif not UXI_AUTH_ENABLED:
+            self._json_response({"ok": True, "msg": "auth disabled"})
+        else:
+            self._json_response({"ok": False, "msg": "invalid PIN"}, 401)
     
     def _handle_cmd_request(self):
         """Handle /api/cmd POST requests."""
@@ -983,6 +1262,7 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             
             logger.info(f"Command request: {cmd_str}")
             result = handle_cmd(cmd_str)
+            _state_cache.invalidate()
             
             # Return 400 for invalid commands
             if not result.get("ok", False):
@@ -1026,28 +1306,20 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
                 return
             
             query = data.get("query", "")
-            if query:
-                # Validate and sanitize query
-                if len(query) > 500:
-                    self._json_response({"ok": False, "msg": "query too long"}, 400)
-                    return
-                
-                # Basic sanitization - remove dangerous characters
-                if not re.match(r'^[a-zA-Z0-9\s\-+.:_()[\]]+$', query):
-                    self._json_response({"ok": False, "msg": "invalid characters in query"}, 400)
-                    return
-                
+            valid, err = _validate_query(query)
+            if valid:
                 try:
                     logger.info(f"Play request: {query}")
                     subprocess.Popen(["mox", query], 
                                    stdout=subprocess.DEVNULL, 
                                    stderr=subprocess.DEVNULL)
+                    _state_cache.invalidate()
                     self._json_response({"ok": True, "msg": f"playing: {query}"})
                 except Exception as e:
                     logger.error(f"Play command failed: {e}")
                     self._json_response({"ok": False, "msg": f"play failed: {str(e)}"}, 500)
             else:
-                self._json_response({"ok": False, "msg": "empty query"}, 400)
+                self._json_response({"ok": False, "msg": err}, 400)
                 
         except Exception as e:
             logger.error(f"Error handling play request: {e}")
@@ -1062,6 +1334,7 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", len(content))
             self.send_header("Cache-Control", "no-cache")
+            self.send_header("Set-Cookie", f"mox_token={CSRF_TOKEN}; Path=/; SameSite=Strict")
             # Security headers
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("X-Frame-Options", "DENY")
@@ -1071,25 +1344,27 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
         except FileNotFoundError:
             self.send_error(404, "music_ui.html not found")
 
-    def _json_response(self, data, status=200):
+    def _json_response(self, data, status=200, headers=None):
         body = json.dumps(data).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", len(body))
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", _allowed_origin())
         self.send_header("Cache-Control", "no-cache")
         # Security headers
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("X-XSS-Protection", "1; mode=block")
+        for key, value in (headers or {}).items():
+            self.send_header(key, value)
         self.end_headers()
         self.wfile.write(body)
 
     def do_OPTIONS(self):
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", _allowed_origin())
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Mox-Token")
         self.end_headers()
     
     def do_PUT(self):
@@ -1152,6 +1427,8 @@ def main():
         print(f"   html: {html_path}")
         print(f"   log: ~/music_system/data/server.log")
         print(f"   SSE: GET /api/events")
+        if UXI_AUTH_ENABLED:
+            print(f"   Web UI PIN: {UXI_AUTH_PIN}")
         print(f"   press Ctrl+C to stop")
         
         # Set up signal handlers for graceful shutdown

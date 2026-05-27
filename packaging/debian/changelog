@@ -1,6 +1,6 @@
-mox (6.0.0-1) unstable; urgency=medium
+mox (7.2.2-1) unstable; urgency=medium
 
-  * New major release 6.0.0
+  * New major release 7.2.2
   * Added package management support for npm and Homebrew
   * Enhanced dependency validation and error handling
   * Improved installation script with comprehensive dependency checking

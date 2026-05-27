@@ -239,7 +239,7 @@ TESTS_RUN=$((TESTS_RUN + 1))
 echo -e "${BLUE}[TEST $TESTS_RUN]${NC} Log clear command"
 set +e
 timeout 3s "$MOX_SCRIPT" log-clear >/dev/null 2>&1
-local log_result=$?
+log_result=$?
 set -e
 if [[ $log_result -eq 0 ]] || [[ $log_result -eq 124 ]]; then
     echo -e "  ${GREEN}✅ PASS${NC}"

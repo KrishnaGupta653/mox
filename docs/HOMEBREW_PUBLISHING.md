@@ -14,15 +14,15 @@ Homebrew publishing involves creating a formula in your own tap (custom reposito
 
 ```bash
 # 1. Tag your release
-git tag v6.0.0
+git tag v7.2.2
 git push --tags
 
 # 2. Create release on GitHub
 # Go to: https://github.com/KrishnaGupta653/mox/releases/new
-# - Tag: v6.0.0
-# - Title: "mox v6.0.0"
+# - Tag: v7.2.2
+# - Title: "mox v7.2.2"
 # - Description: Release notes
-# - Upload: mox-6.0.0.tar.gz (if you have one)
+# - Upload: mox-7.2.2.tar.gz (if you have one)
 ```
 
 ## Step 2: Create Your Own Tap
@@ -48,10 +48,10 @@ Create `Formula/mox.rb`:
 class Mox < Formula
   desc "Terminal music CLI - A powerful command-line music player"
   homepage "https://github.com/KrishnaGupta653/mox"
-  url "https://github.com/KrishnaGupta653/mox/archive/v6.0.0.tar.gz"
+  url "https://github.com/KrishnaGupta653/mox/archive/v7.2.2.tar.gz"
   sha256 "REPLACE_WITH_ACTUAL_SHA256"
   license "MIT"
-  version "6.0.0"
+  version "7.2.2"
 
   depends_on "mpv"
   depends_on "curl"
@@ -102,10 +102,10 @@ end
 
 ```bash
 # Download the release tarball
-curl -L https://github.com/KrishnaGupta653/mox/archive/v6.0.0.tar.gz -o mox-6.0.0.tar.gz
+curl -L https://github.com/KrishnaGupta653/mox/archive/v7.2.2.tar.gz -o mox-7.2.2.tar.gz
 
 # Calculate SHA256
-shasum -a 256 mox-6.0.0.tar.gz
+shasum -a 256 mox-7.2.2.tar.gz
 
 # Update the sha256 in your formula
 ```
@@ -128,7 +128,7 @@ brew uninstall mox
 ```bash
 # Commit and push your formula
 git add Formula/mox.rb
-git commit -m "Add mox formula v6.0.0"
+git commit -m "Add mox formula v7.2.2"
 git push origin main
 ```
 

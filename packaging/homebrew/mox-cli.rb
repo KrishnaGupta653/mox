@@ -1,7 +1,7 @@
 class MoxCli < Formula
   desc "Terminal music CLI with web UI and extensive features"
   homepage "https://github.com/KrishnaGupta653/mox"
-  url "https://github.com/KrishnaGupta653/mox/archive/v7.2.0.tar.gz"
+  url "https://github.com/KrishnaGupta653/mox/archive/v7.2.2.tar.gz"
   sha256 "3b4fef41e20e47ac94c2feacdebbdc32d2ed95aa6cad4bae9612207cef147a4a"
   license "MIT"
   head "https://github.com/KrishnaGupta653/mox.git", branch: "main"
@@ -56,8 +56,16 @@ class MoxCli < Formula
   end
 
   def post_install
-    # Run installation script (skip if it doesn't exist or fails)
-    system "#{libexec}/install.sh" if File.exist?("#{libexec}/install.sh") rescue nil
+    # Run installation script if present; a non-zero exit is non-fatal
+    # (the script only creates convenience directories, not required for mox to work)
+    install_script = libexec/"install.sh"
+    if install_script.exist?
+      begin
+        system install_script.to_s
+      rescue => e
+        opoo "post-install script failed (non-fatal): #{e.message}"
+      end
+    end
     
     puts <<~EOS
       🎵 mox has been installed!

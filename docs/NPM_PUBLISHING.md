@@ -17,10 +17,10 @@ cd tests && ./test.sh
 
 # 3. Check package contents
 npm pack
-tar -tzf mox-6.0.0.tgz
+tar -tzf mox-7.2.2.tgz
 
 # 4. Test local installation
-npm install -g ./mox-6.0.0.tgz
+npm install -g ./mox-7.2.2.tgz
 mox --help
 npm uninstall -g mox
 ```
@@ -47,9 +47,9 @@ npm info mox
 
 ```bash
 # 1. Update version (patch/minor/major)
-npm version patch  # 6.0.0 → 6.0.1
-npm version minor  # 6.0.0 → 6.1.0
-npm version major  # 6.0.0 → 7.0.0
+npm version patch  # 7.2.2 → 6.0.1
+npm version minor  # 7.2.2 → 6.1.0
+npm version major  # 7.2.2 → 7.0.0
 
 # 2. Update VERSION file to match
 echo "6.0.1" > VERSION

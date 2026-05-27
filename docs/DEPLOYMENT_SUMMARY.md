@@ -59,8 +59,8 @@ All three publishing methods are documented and ready:
 ### 🚀 **Next Steps for Publishing**
 
 #### Immediate Actions:
-1. **Test final package**: `npm pack && tar -tzf mox-6.0.0.tgz`
-2. **Create GitHub release**: Tag v6.0.0 with release notes
+1. **Test final package**: `npm pack && tar -tzf mox-7.2.2.tgz`
+2. **Create GitHub release**: Tag v7.2.2 with release notes
 3. **Publish to NPM**: `npm publish`
 
 #### Follow-up Actions:

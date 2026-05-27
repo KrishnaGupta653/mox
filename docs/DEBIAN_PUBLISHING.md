@@ -24,8 +24,8 @@ sudo apt-get install devscripts debhelper dh-make build-essential lintian
 
 ```bash
 # 1. Create working directory
-mkdir -p ~/debian-packages/mox-6.0.0
-cd ~/debian-packages/mox-6.0.0
+mkdir -p ~/debian-packages/mox-7.2.2
+cd ~/debian-packages/mox-7.2.2
 
 # 2. Copy your source
 cp -r /path/to/mox/* .
@@ -74,10 +74,10 @@ override_dh_auto_clean:
 debuild -us -uc
 
 # 2. Check package quality
-lintian ../mox_6.0.0-1_all.deb
+lintian ../mox_7.2.2-1_all.deb
 
 # 3. Test installation
-sudo dpkg -i ../mox_6.0.0-1_all.deb
+sudo dpkg -i ../mox_7.2.2-1_all.deb
 mox --help
 sudo dpkg -r mox
 ```
@@ -89,7 +89,7 @@ sudo dpkg -r mox
 mkdir -p ~/apt-repo/{dists/stable/main/binary-amd64,pool/main}
 
 # 2. Copy package
-cp ../mox_6.0.0-1_all.deb ~/apt-repo/pool/main/
+cp ../mox_7.2.2-1_all.deb ~/apt-repo/pool/main/
 
 # 3. Create Packages file
 cd ~/apt-repo
@@ -191,7 +191,7 @@ reportbug wnpp
 debuild -S
 
 # 2. Upload to PPA
-dput ppa:yourusername/mox ../mox_6.0.0-1_source.changes
+dput ppa:yourusername/mox ../mox_7.2.2-1_source.changes
 
 # 3. Wait for build completion
 ```
@@ -255,10 +255,10 @@ jobs:
 
 ```bash
 # Check package contents
-dpkg-deb -c mox_6.0.0-1_all.deb
+dpkg-deb -c mox_7.2.2-1_all.deb
 
 # Check package info
-dpkg-deb -I mox_6.0.0-1_all.deb
+dpkg-deb -I mox_7.2.2-1_all.deb
 
 # Test installation in clean environment
 docker run -it ubuntu:22.04
@@ -276,6 +276,6 @@ docker run -it ubuntu:22.04
 
 ### Version Naming Convention
 
-- **Upstream version**: 6.0.0
+- **Upstream version**: 7.2.2
 - **Debian revision**: -1, -2, etc.
-- **Full version**: 6.0.0-1
+- **Full version**: 7.2.2-1

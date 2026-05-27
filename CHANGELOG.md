@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.2.2] - 2026-05-27
+
+### Fixed
+- **CI/CD Pipeline**: Fixed GitHub Actions artifact versions (v4 for upload/download)
+- **CI/CD Pipeline**: Fixed release-assets job dependency and conditions
+- **Test Scripts**: Removed invalid `local` keyword usage outside functions
+- **Homebrew Formula**: Fixed `rescue nil` error handling in post_install
+- **Homebrew Formula**: Updated version to 7.2.2 for consistency
+- **Version Sync**: Synchronized all version references across documentation
+
+### Changed
+- **Release Process**: Improved artifact handling in CI/CD pipeline
+- **Test Suite**: Enhanced compatibility with strict shell modes
+
 ## [6.1.1] - 2026-03-25
 
 ### Fixed

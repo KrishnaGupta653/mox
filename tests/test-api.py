@@ -19,6 +19,8 @@ import subprocess
 import socket
 import shutil
 
+os.environ.setdefault('MOX_TEST_MODE', '1')
+
 # Add src directory to path to import the server
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # ============================================================
-#  mox — terminal music CLI  (hardened build v6 — "God Tier")
+#  mox — terminal music CLI  (hardened build v7.2.2)
 #  All state lives in ~/music_system/
 #
 #  v5 changes over v4:
@@ -67,6 +67,10 @@ STATIONS_FILE="$MUSIC_ROOT/stations.tsv"
 AUTOSAVE_QUEUE_FILE="$DATA_DIR/autosave_queue.m3u"
 QUEUE_SAVE_AUTO_FILE="$DATA_DIR/queue_save_auto_enabled"
 VOLUME_SPEED_STATE="$DATA_DIR/volume_speed_state"
+NORM_STATE_FILE="$DATA_DIR/norm_enabled"
+TXT_PROGRESS_FILE="$DATA_DIR/txt_progress"
+SHARE_DIR="$DATA_DIR/shares"
+SCHEDULE_DIR="$DATA_DIR/schedules"
 TXT_LINES=()
 CONFIG_FILE="$MUSIC_ROOT/config"
 PLUGINS_DIR="$MUSIC_ROOT/plugins"
@@ -93,6 +97,7 @@ CROSSFADE_SECS=0           # crossfade duration between tracks (0=off)
 BAR_REFRESH_MS=500         # progress bar refresh interval
 M_UPDATE_URL=""            # self-update URL (empty=disabled)
 M_UPDATE_SHA256=""         # expected SHA256 for self-update
+UXI_AUTH=0                 # 1 = require web UI PIN on first visit
 
 # ── load user config ──────────────────────────────────────────
 # shellcheck disable=SC1090
@@ -231,60 +236,38 @@ _resolve_bin() {
   echo ""; return 1
 }
 
-YTDLP="${YTDLP:-$(_resolve_bin yt-dlp)}"
-MPV="${MPV:-$(_resolve_bin mpv)}"
-FZF="${FZF:-$(_resolve_bin fzf)}"
-SOCAT="${SOCAT:-$(_resolve_bin socat)}"
-JQ="${JQ:-$(_resolve_bin jq)}"
-CURL="${CURL:-$(_resolve_bin curl)}"
-CHAFA="${CHAFA:-$(_resolve_bin chafa)}"    # v5-O: optional, for album art
-FFPROBE="${FFPROBE:-$(_resolve_bin ffprobe)}" # v5-X: optional, for local index
-
-# ── dependency validation ─────────────────────────────────────
-_check_dependencies() {
-  local missing_required=()
-  local missing_optional=()
-  
-  # Required dependencies
-  [ -z "$MPV" ] && missing_required+=("mpv")
-  [ -z "$CURL" ] && missing_required+=("curl") 
-  [ -z "$JQ" ] && missing_required+=("jq")
-  [ -z "$(command -v python3)" ] && missing_required+=("python3")
-  
-  # Optional but recommended
-  [ -z "$YTDLP" ] && missing_optional+=("yt-dlp")
-  [ -z "$FZF" ] && missing_optional+=("fzf")
-  [ -z "$CHAFA" ] && missing_optional+=("chafa")
-  [ -z "$FFPROBE" ] && missing_optional+=("ffprobe/ffmpeg")
-  
-  if [ ${#missing_required[@]} -gt 0 ]; then
-    echo "${R}✗ Missing required dependencies:${X}" >&2
-    printf "  %s\n" "${missing_required[@]}" >&2
-    echo "" >&2
-    echo "Install missing dependencies:" >&2
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-      echo "  ${G}brew install ${missing_required[*]}${X}" >&2
-    elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-      echo "  ${G}sudo apt install ${missing_required[*]}${X}  # Ubuntu/Debian" >&2
-      echo "  ${G}sudo dnf install ${missing_required[*]}${X}  # Fedora/RHEL" >&2
-      echo "  ${G}sudo pacman -S ${missing_required[*]}${X}   # Arch Linux" >&2
-    fi
-    echo "" >&2
-    echo "Run '${G}m help${X}' after installing dependencies." >&2
-    exit 2
-  fi
-  
-  if [ ${#missing_optional[@]} -gt 0 ]; then
-    echo "${Y}⚠ Optional dependencies missing (reduced functionality):${X}" >&2
-    printf "  %s\n" "${missing_optional[@]}" >&2
-    echo "" >&2
+# ── lazy binary resolution ────────────────────────────────────
+# Binaries are resolved on first use, not at startup.
+# This means `mox help`, `mox status`, `mox doctor`, and `mox completions`
+# never pay the cost of resolving binaries that aren't needed.
+# _ensure_bin <varname> <binary>  — resolves once and caches in the named variable.
+_ensure_bin() {
+  local varname="$1" binary="$2"
+  # Already resolved (non-empty)?
+  [[ -n "${(P)varname}" ]] && return 0
+  local path; path=$(_resolve_bin "$binary")
+  if [[ -n "$path" ]]; then
+    eval "${varname}=${(q)path}"
   fi
 }
+
+# Declare variables empty; they are populated on first use via _ensure_bin.
+# Commands that need a specific binary call _ensure_bin before using it.
+# _check_deps (called by _need/_start) resolves the required set all at once.
+YTDLP="${YTDLP:-}"
+MPV="${MPV:-}"
+FZF="${FZF:-}"
+SOCAT="${SOCAT:-}"
+JQ="${JQ:-}"
+CURL="${CURL:-}"
+CHAFA="${CHAFA:-}"    # optional — album art (v5-O)
+FFPROBE="${FFPROBE:-}" # optional — local index (v5-X)
 
 # ── bootstrap dirs ────────────────────────────────────────────
 _bootstrap() {
   mkdir -p "$SOCKET_DIR" "$CACHE_DIR" "$PLAYLIST_DIR" \
-           "$TXTS_DIR" "$DOWNLOADS_DIR" "$DATA_DIR" "$LOCK_DIR" "$PLUGINS_DIR"
+           "$TXTS_DIR" "$DOWNLOADS_DIR" "$DATA_DIR" "$LOCK_DIR" "$PLUGINS_DIR" \
+           "$SHARE_DIR" "$SCHEDULE_DIR"
   [[ ! -f "$LIKES_FILE" ]]   && touch "$LIKES_FILE"
   [[ ! -f "$HISTORY_FILE" ]] && touch "$HISTORY_FILE"
   [[ ! -f "$BOOKMARKS_FILE" ]] && touch "$BOOKMARKS_FILE"
@@ -318,11 +301,13 @@ _bootstrap() {
 # BAR_REFRESH_MS=500                # progress bar refresh interval
 # M_UPDATE_URL=                     # self-update URL (empty=disabled)
 # M_UPDATE_SHA256=                  # expected SHA256 for self-update
+# UXI_AUTH=0                        # 1 = require a startup PIN for web UI
 EOF
   fi
 }
-_check_dependencies
 _bootstrap
+# Dependency checks are intentionally lazy so help/status/doctor can run even on
+# a partial install. Commands call _check_deps only when they need the mpv stack.
 
 # ── logging helpers (structured exit codes: 1=general 2=dep 3=daemon 4=nothing playing 5=search 6=file 7=network) ──
 _die() {
@@ -342,26 +327,37 @@ _info() { echo "${C}→ $*${X}"; }
 _warn() { echo "${Y}⚠ $*${X}"; }
 
 # ── dependency check ──────────────────────────────────────────
+# Called by _need before any command that requires the daemon/mpv stack.
+# help, version, doctor, completions skip this entirely.
+# Resolves required binaries on first call (lazy); subsequent calls are fast.
 _check_deps() {
+  # Resolve required binaries on first use
+  _ensure_bin MPV    mpv
+  _ensure_bin SOCAT  socat
+  _ensure_bin JQ     jq
+  _ensure_bin CURL   curl
+  _ensure_bin YTDLP  yt-dlp
+  _ensure_bin FZF    fzf
+  _ensure_bin CHAFA  chafa
+  _ensure_bin FFPROBE ffprobe
+
   local missing=0
-  for bin in "$YTDLP" "$MPV" "$FZF" "$SOCAT" "$JQ"; do
+  for bin in "$MPV" "$SOCAT" "$JQ"; do
     if [[ -z "$bin" || ! -x "$bin" ]]; then
       _warn "missing binary: ${bin:-<unresolved>}"
       missing=1
     fi
   done
   if [[ $missing -eq 1 ]]; then
-    _die 2 "install missing deps:\n  macOS: brew install yt-dlp mpv fzf socat jq\n  Linux: sudo apt install mpv socat jq fzf && pip install yt-dlp"
+    _die 2 "install missing deps:\n  macOS: brew install mpv socat jq\n  Linux: sudo apt install mpv socat jq"
   fi
-  # Optional deps: just warn, don't die
-  [[ -z "$CURL" || ! -x "$CURL" ]] && _warn "curl not found — API search, lyrics, scrobble disabled"
-  [[ -z "$CHAFA" || ! -x "$CHAFA" ]] && true  # silent, chafa is optional
+  # Optional deps are checked by the specific commands that need them.
 }
-_check_deps
 _validate_config
 
 # ── yt-dlp freshness check ────────────────────────────────────
 _check_ytdlp_age() {
+  [[ -x "$YTDLP" ]] || return
   local ver_file="$CACHE_DIR/.ytdlp_version_check"
   local age; age=$(_cache_age "$ver_file" 2>/dev/null || echo 99999)
   (( age < 86400 )) && return
@@ -392,6 +388,7 @@ _detect_audio_devices
 
 # ── daemon management ─────────────────────────────────────────
 _start() {
+  _check_deps
   [ -S "$SOCKET" ] && return 0
   if ! _lock "$LOCK_FILE" 5; then
     _info "waiting for daemon to start..."
@@ -442,6 +439,9 @@ _start() {
         [[ -n "$v" ]] && echo "{\"command\":[\"set_property\",\"volume\",$v]}" | "$SOCAT" - "$SOCKET" >/dev/null 2>&1
         [[ -n "$s" ]] && echo "{\"command\":[\"set_property\",\"speed\",$s]}" | "$SOCAT" - "$SOCKET" >/dev/null 2>&1
       fi
+      if [[ -f "$NORM_STATE_FILE" ]]; then
+        echo '{"command":["set_property","af","acompressor,loudnorm"]}' | "$SOCAT" - "$SOCKET" >/dev/null 2>&1
+      fi
       _unlock "$LOCK_FILE"; return 0
     fi
   done
@@ -451,6 +451,7 @@ _start() {
 }
 
 _need() {
+  _check_deps
   if [ ! -S "$SOCKET" ]; then
     _die 3 "daemon not running — run: mox start"
   fi
@@ -563,7 +564,7 @@ _wait_prop() {
     printf '\r\e[2K  %s buffering...' "$sp" >&2
     si=$(( si + 1 ))
     (( i % 10 == 0 && sleep_ms < 800 )) && sleep_ms=$(( sleep_ms * 2 ))
-    sleep $(awk "BEGIN{printf \"%.3f\", $sleep_ms/1000}")
+    sleep "0.${(l:3::0:)sleep_ms}"
   done
 
   printf '\r\e[2K' >&2
@@ -604,9 +605,8 @@ _ipc_loadfile() {
 }
 
 # ── cache helpers ─────────────────────────────────────────────
-# v4-T: include $USER in cache key
 _cache_key() {
-  printf '%s\0%s' "${USER:-$(id -un)}" "$1" | _md5 | tr -d ' \n'
+  printf '%s' "$1" | _md5 | tr -d ' \n'
 }
 
 _cache_age() {
@@ -751,6 +751,7 @@ _search_ytdlp_stream() {
 # yt-dlp path: streams line-by-line into a tmpfile, promoted to cache
 #   AFTER fzf exits so the cache is never truncated by a mid-stream ESC.
 _do_search() {
+  _check_ytdlp_age
   local query="$1" n="${2:-$SEARCH_RESULTS}"
   local key="$CACHE_DIR/$(_cache_key "$query").cache"
 
@@ -945,13 +946,14 @@ _notify_track() {
 _log_history() {
   local title="$1" url="$2"
   [ -z "$url" ] && return
+  local norm_url; norm_url=$(printf '%s' "$url" | tr '[:upper:]' '[:lower:]')
 
   _notify_track "$title"
 
   if _lock "$HISTORY_LOCK" 3; then
     # Dedup: check last 50 entries for this URL
     local recent_count
-    recent_count=$(tail -50 "$HISTORY_FILE" 2>/dev/null | grep -cF "$url" 2>/dev/null)
+    recent_count=$(tail -50 "$HISTORY_FILE" 2>/dev/null | tr '[:upper:]' '[:lower:]' | grep -cF "$norm_url" 2>/dev/null)
     recent_count="${recent_count:-0}"
     recent_count=$(echo "$recent_count" | tr -cd '0-9')
     recent_count="${recent_count:-0}"
@@ -983,7 +985,7 @@ _scrobble() {
   payload=$("$JQ" -cn \
     --arg title "$title" --arg url "$url" --arg ts "$(date +%s)" \
     '{listen_type:"single",payload:[{listened_at:($ts|tonumber),track_metadata:{track_name:$title,additional_info:{media_player:"m-cli",origin_url:$url}}}]}')
-  curl -s -X POST "$SCROBBLE_URL" \
+  curl -s --max-time 5 -X POST "$SCROBBLE_URL" \
     -H "Content-Type: application/json" \
     -d "$payload" >/dev/null 2>&1 || true
 }
@@ -1610,9 +1612,9 @@ do_bar() {
   while true; do
     # v5-K — _get_multi uses individual _get calls (get_property_list is invalid mpv IPC)
     local raw_props
-    raw_props=$(_get_multi time-pos duration pause speed media-title loop-playlist loop-file volume playlist-playing-pos 2>/dev/null)
+    raw_props=$(_get_multi time-pos duration pause speed media-title loop-playlist loop-file volume playlist-playing-pos demuxer-cache-state 2>/dev/null)
 
-    local pos dur paused speed title2 repeat loop_one vol pl_pos
+    local pos dur paused speed title2 repeat loop_one vol pl_pos cache_state
     if echo "$raw_props" | "$JQ" -e 'type == "object"' >/dev/null 2>&1; then
       local parsed
       parsed=$(echo "$raw_props" | "$JQ" -r '
@@ -1625,9 +1627,10 @@ do_bar() {
           (.["loop-playlist"]     // "no"),
           (.["loop-file"]         // "no"),
           (.["volume"]            // "80"),
-          (.["playlist-playing-pos"] // "0")
+          (.["playlist-playing-pos"] // "0"),
+          (.["demuxer-cache-state"] // "")
         ] | @tsv' 2>/dev/null)
-      IFS=$'\t' read -r pos dur paused speed title2 repeat loop_one vol pl_pos <<< "$parsed"
+      IFS=$'\t' read -r pos dur paused speed title2 repeat loop_one vol pl_pos cache_state <<< "$parsed"
     else
       pos=$(_get time-pos); dur=$(_get duration); paused=$(_get pause)
       speed=$(_get speed); title2=$(_get media-title); repeat=$(_get loop-playlist)
@@ -1646,6 +1649,16 @@ do_bar() {
     (( dur_i < 1 )) && dur_i=1
 
     local pct=$(( pos_i * 100 / dur_i ))
+    local buf_pct=""
+    if [[ -n "$cache_state" && "$cache_state" != "null" ]]; then
+      local cache_end
+      cache_end=$(printf '%s' "$cache_state" | "$JQ" -r '."seekable-ranges"[-1].end // empty' 2>/dev/null)
+      if [[ -n "$cache_end" ]]; then
+        local cache_i; cache_i=$(printf '%.0f' "$cache_end" 2>/dev/null || echo 0)
+        (( cache_i > dur_i )) && cache_i=$dur_i
+        buf_pct=$(( cache_i * 100 / dur_i ))
+      fi
+    fi
     local filled=$(( pos_i * bar_w / dur_i ))
     local empty=$(( bar_w - filled ))
     (( filled < 0 )) && filled=0
@@ -1671,8 +1684,8 @@ do_bar() {
     printf "  \e[0;36m%s\e[0m\e[2m%s\e[0m  \e[0;33m%s\e[0m / \e[0;37m%s\e[0m  \e[2m(%s)\e[0m" \
       "$bar_filled" "$bar_empty" "$pos_fmt" "$dur_fmt" "$rem_fmt"
     printf '\n\r\e[2K'
-    printf "  \e[2mspd:%sx  vol:%s%%  %d%%  p=pause  n/b=skip  ,/.=seek  +/-=vol  r=rpt  l=lyrics  q=quit\e[0m" \
-      "$speed" "$vol" "$pct"
+    printf "  \e[2mspd:%sx  vol:%s%%  %d%%%s  p=pause  n/b=skip  ,/.=seek  +/-=vol  r=rpt  l=lyrics  q=quit\e[0m" \
+      "$speed" "$vol" "$pct" "${buf_pct:+  buf:${buf_pct}%}"
     printf '\e[2A'
 
     local key
@@ -1776,6 +1789,8 @@ do_queue() {
 
 do_queue_move() {
   [[ -z "${1:-}" || -z "${2:-}" ]] && { _err "usage: mox qmove <from_pos> <to_pos>  (1-based)"; return 1; }
+  [[ "$1" == <-> && "$2" == <-> ]] || { _err "qmove positions must be positive integers"; return 1; }
+  (( $1 > 0 && $2 > 0 )) || { _err "qmove positions must be positive integers"; return 1; }
   _need
   local from=$(( $1 - 1 )) to=$(( $2 - 1 ))
   _silent "{\"command\":[\"playlist-move\",${from},${to}]}"
@@ -1784,6 +1799,8 @@ do_queue_move() {
 
 do_queue_remove() {
   [[ -z "${1:-}" ]] && { _err "usage: mox qrm <pos>  (1-based)"; return 1; }
+  [[ "$1" == <-> ]] || { _err "qrm position must be a positive integer"; return 1; }
+  (( $1 > 0 )) || { _err "qrm position must be a positive integer"; return 1; }
   _need
   local pos=$(( $1 - 1 ))
   _silent "{\"command\":[\"playlist-remove\",${pos}]}"
@@ -2091,13 +2108,22 @@ do_playlists() {
 
 do_playlist_del() {
   [ -z "${1:-}" ] && { _err "usage: mox pldel <n>"; return 1; }
-  local f="$PLAYLIST_DIR/${1}.m3u"
+  # Sanitize name the same way do_save does — strip everything except alnum, _, -
+  local name
+  name=$(printf '%s' "$1" | tr -cd '[:alnum:]_-')
+  [[ -z "$name" ]] && { _err "invalid playlist name"; return 1; }
+  local f="$PLAYLIST_DIR/${name}.m3u"
   [ -f "$f" ] || { _err "not found: $1"; return 1; }
-  printf "${Y}Delete playlist '%s'? [y/N] ${X}" "$1"
+  # Defense-in-depth: confirm the resolved path stays inside PLAYLIST_DIR
+  local real_f real_dir
+  real_f=$(realpath "$f" 2>/dev/null || echo "$f")
+  real_dir=$(realpath "$PLAYLIST_DIR" 2>/dev/null || echo "$PLAYLIST_DIR")
+  [[ "$real_f" == "$real_dir"/* ]] || { _err "invalid path"; return 1; }
+  printf "${Y}Delete playlist '%s'? [y/N] ${X}" "$name"
   read -r ans
   [[ "$ans" =~ ^[Yy]$ ]] || { _warn "cancelled"; return; }
   rm "$f"
-  _ok "deleted playlist: $1"
+  _ok "deleted playlist: $name"
 }
 
 # ── download ──────────────────────────────────────────────────
@@ -2575,7 +2601,7 @@ do_uxi() {
 
   # Start bridge server in background
   _info "starting uxi bridge server on port $UXI_PORT…"
-  "$py3" "$server_path" "$UXI_PORT" > "$DATA_DIR/uxi_server.log" 2>&1 &
+  UXI_AUTH="$UXI_AUTH" "$py3" "$server_path" "$UXI_PORT" > "$DATA_DIR/uxi_server.log" 2>&1 &
   local srv_pid=$!
   echo "$srv_pid" > "$UXI_PID_FILE"
   disown "$srv_pid" 2>/dev/null
@@ -2597,6 +2623,7 @@ do_uxi() {
   fi
 
   _ok "uxi server running → http://127.0.0.1:${UXI_PORT}  (pid $srv_pid)"
+  [[ "$UXI_AUTH" == "1" ]] && _info "PIN is printed in: $DATA_DIR/uxi_server.log"
   _open_browser "http://127.0.0.1:${UXI_PORT}"
 }
 
@@ -2888,7 +2915,9 @@ do_txt() {
   # Semaphore counter file for throttle (pids array in subshell doesn't work).
   local txt_tmpdir; txt_tmpdir=$(mktemp -d "$DATA_DIR/txt_resolve.XXXXXX")
   local sem_file="$txt_tmpdir/sem"
+  local progress_file="$TXT_PROGRESS_FILE"
   echo 0 > "$sem_file"
+  echo "0/${#TXT_LINES[@]}" > "$progress_file"
 
   (
     set +v +x  # Disable verbose/debug output in subshell
@@ -2899,16 +2928,60 @@ do_txt() {
     local yt_api_key="$_bg_youtube_api_key"
     local inv_host="$_bg_invidious_host"
     local curl_bin="$_bg_curl"
-    local tmpdir="$txt_tmpdir" sem="$sem_file"
-    local _user_for_cache="${USER:-$(id -un)}"
+    local tmpdir="$txt_tmpdir" sem="$sem_file" progress="$progress_file"
+
+    _sem_add() {
+      local delta="$1" lock="${sem}.lock"
+      # Use flock(1) when available (Linux util-linux); fall back to mkdir on macOS.
+      if command -v flock >/dev/null 2>&1; then
+        (
+          flock -x 200
+          local val; val=$(cat "$sem" 2>/dev/null || echo 0)
+          val=$(( val + delta ))
+          (( val < 0 )) && val=0
+          echo "$val" > "$sem"
+        ) 200>"$lock"
+      else
+        local lockd="${sem}.lock.d"
+        while ! mkdir "$lockd" 2>/dev/null; do sleep 0.02; done
+        local val; val=$(cat "$sem" 2>/dev/null || echo 0)
+        val=$(( val + delta ))
+        (( val < 0 )) && val=0
+        echo "$val" > "$sem"
+        rmdir "$lockd" 2>/dev/null
+      fi
+    }
+
+    _progress_add() {
+      local lock="${progress}.lock"
+      if command -v flock >/dev/null 2>&1; then
+        (
+          flock -x 200
+          local done_count total_count
+          IFS=/ read -r done_count total_count < "$progress"
+          done_count=${done_count:-0}
+          total_count=${total_count:-${#TXT_LINES[@]}}
+          echo "$(( done_count + 1 ))/${total_count}" > "$progress"
+        ) 200>"$lock"
+      else
+        local lockd="${progress}.lock.d"
+        while ! mkdir "$lockd" 2>/dev/null; do sleep 0.02; done
+        local done_count total_count
+        IFS=/ read -r done_count total_count < "$progress"
+        done_count=${done_count:-0}
+        total_count=${total_count:-${#TXT_LINES[@]}}
+        echo "$(( done_count + 1 ))/${total_count}" > "$progress"
+        rmdir "$lockd" 2>/dev/null
+      fi
+    }
 
     _bg_search_one() {
       local query="$1"
       local key
       if [[ "$(uname -s)" = "Darwin" ]]; then
-        key="${cache_dir}/$(printf '%s\0%s' "$_user_for_cache" "$query" | md5 -q 2>/dev/null).cache"
+        key="${cache_dir}/$(printf '%s' "$query" | md5 -q 2>/dev/null).cache"
       else
-        key="${cache_dir}/$(printf '%s\0%s' "$_user_for_cache" "$query" | md5sum 2>/dev/null | cut -c1-32).cache"
+        key="${cache_dir}/$(printf '%s' "$query" | md5sum 2>/dev/null | cut -c1-32).cache"
       fi
       [[ "$key" = "${cache_dir}/.cache" ]] && key="${cache_dir}/$(printf '%s' "$query" | md5sum 2>/dev/null | cut -c1-32).cache"
 
@@ -2980,17 +3053,16 @@ do_txt() {
         [[ "$running" -lt 4 ]] && break
         sleep 0.05
       done
-      echo $(( $(cat "$sem" 2>/dev/null || echo 0) + 1 )) > "$sem"
+      _sem_add 1
 
       local query="${TXT_LINES[$i]}"
       (
         set +v +x  # Disable verbose/debug output in worker subshell
         local cur; cur=$(cat "$gen_file" 2>/dev/null || echo 0)
-        [ "$cur" = "$my_gen" ] || { echo $(( $(cat "$sem" 2>/dev/null) - 1 )) > "$sem"; exit 0; }
+        [ "$cur" = "$my_gen" ] || { _sem_add -1; exit 0; }
         local result; result=$(_bg_search_one "$query")
-        local cnt
-        cnt=$(cat "$sem" 2>/dev/null || echo 0)
-        echo $(( cnt - 1 )) > "$sem"
+        _sem_add -1
+        _progress_add
         [ -z "$result" ] && exit 0
         local url
         url=$(echo "$result" | head -1 | awk -F ' \| ' '{print $NF}')
@@ -3018,6 +3090,7 @@ do_txt() {
       fi
       j=$(( j + 1 ))
     done
+    echo "done/${#TXT_LINES[@]}" > "$progress"
     rm -rf "$tmpdir"
   ) >/dev/null 2>&1 &
 
@@ -3026,6 +3099,19 @@ do_txt() {
   local tmpf_pid; tmpf_pid=$(mktemp "$DATA_DIR/txt_bg_pid.XXXXXX")
   echo $bg_pid > "$tmpf_pid" && mv "$tmpf_pid" "$DATA_DIR/txt_bg_pid" || rm -f "$tmpf_pid"
   disown $bg_pid
+
+  local progress_last=""
+  local progress_deadline=$(( $(date +%s) + 8 ))
+  while kill -0 "$bg_pid" 2>/dev/null && (( $(date +%s) < progress_deadline )); do
+    local progress_now
+    progress_now=$(cat "$TXT_PROGRESS_FILE" 2>/dev/null || echo "")
+    if [[ -n "$progress_now" && "$progress_now" != "$progress_last" ]]; then
+      progress_last="$progress_now"
+      printf '\r\e[2K  → resolved %s buffering...' "$progress_now" >&2
+    fi
+    sleep 0.5
+  done
+  [[ -n "$progress_last" ]] && printf '\r\e[2K' >&2
 
   local title; title=$(_wait_title "$first_url" 30)
   _ok "▶  ${title:-${TXT_LINES[1]}}"
@@ -3319,10 +3405,12 @@ do_norm() {
   if echo "$current" | grep -qF "loudnorm"; then
     local new_af; new_af=$(echo "$current" | awk 'BEGIN{FS=OFS=","}{result=""; for(i=1;i<=NF;i++){if(index($i,"acompressor")==0 && index($i,"loudnorm")==0) result=(result==""?$i:result","$i)} print result }')
     _af_set "${new_af:-}"
+    rm -f "$NORM_STATE_FILE"
     _ok "🔇 loudness normalisation: OFF"
   else
     local new_af="${current:+${current},}acompressor,loudnorm"
     _af_set "$new_af"
+    touch "$NORM_STATE_FILE"
     _ok "🔊 loudness normalisation: ON  (levels balanced across tracks)"
   fi
 }
@@ -3462,13 +3550,18 @@ do_local() {
   [[ -z "$results" ]] && { _warn "no local tracks matching: $query"; return; }
 
   local chosen
-  chosen=$(echo "$results" | "$FZF" \
-    --height 60% --reverse \
-    --prompt "🎵 local > " \
-    --header "ENTER play · ESC cancel" \
-    --with-nth=2 --delimiter=$'\t' \
-    --preview 'echo {} | awk -F"\t" "{print \"File:\", \$1, \"\nTitle:\", \$2, \"\nArtist:\", \$3}"' \
-    --preview-window=down:3:wrap)
+  if [[ -n "${MOX_TEST_MODE:-}" ]]; then
+    chosen=$(printf '%s\n' "$results" | head -1)
+  else
+    [[ -x "$FZF" ]] || { _err "fzf not found — install fzf or pass a search query in test mode"; return 2; }
+    chosen=$(echo "$results" | "$FZF" \
+      --height 60% --reverse \
+      --prompt "🎵 local > " \
+      --header "ENTER play · ESC cancel" \
+      --with-nth=2 --delimiter=$'\t' \
+      --preview 'echo {} | awk -F"\t" "{print \"File:\", \$1, \"\nTitle:\", \$2, \"\nArtist:\", \$3}"' \
+      --preview-window=down:3:wrap)
+  fi
 
   [[ -z "$chosen" ]] && { _warn "cancelled"; return; }
   local filepath; filepath=$(printf '%s' "$chosen" | awk -F'\t' '{print $1}')
@@ -3490,27 +3583,172 @@ do_reload_config() {
   _info "note: daemon audio settings (device, volume) require mox stop && mox start to apply"
 }
 
-# ── cast (stub with documentation) ──────────────────────────────────────────
 do_cast() {
-  _info "casting via mpv --ao:"
-  echo ""
-  if [[ "$OS" == "mac" ]]; then
-    echo "  macOS: use 'coreaudio' or AirPlay via system audio routing"
-    echo "  List devices: mox devices"
-  else
-    echo "  Linux: use PulseAudio/PipeWire sink routing"
-    echo "  Set device: mox devices  then  mox sp / mox hp"
+  _need
+  local url; url=$(_get path)
+  [[ -z "$url" ]] && url=$(_get filename)
+  [[ -z "$url" ]] && { _err "nothing to cast"; return 1; }
+
+  if command -v castnow >/dev/null 2>&1; then
+    _info "casting with castnow..."
+    castnow "$url"
+    return $?
   fi
-  echo ""
-  echo "  For Chromecast: install castnow (npm) or use mkchromecast"
-  echo "  Example: yt-dlp -g \"\$(m now | grep URL)\" | castnow --toStdin"
-  echo ""
+
+  if command -v mkchromecast >/dev/null 2>&1; then
+    _info "casting with mkchromecast..."
+    mkchromecast --source-url "$url"
+    return $?
+  fi
+
+  if [[ "$OS" == "mac" ]] && command -v open >/dev/null 2>&1; then
+    _info "opening current media in QuickTime Player; use macOS AirPlay from there."
+    open -a "QuickTime Player" "$url" 2>/dev/null && return 0
+  fi
+
+  if [[ "$OS" == "mac" ]] && command -v pbcopy >/dev/null 2>&1; then
+    printf '%s' "$url" | pbcopy
+    _ok "copied media URL to clipboard; install castnow for direct Chromecast support"
+    return 0
+  elif command -v xclip >/dev/null 2>&1; then
+    printf '%s' "$url" | xclip -selection clipboard
+    _ok "copied media URL to clipboard; install castnow or mkchromecast for direct casting"
+    return 0
+  fi
+
+  _warn "install castnow or mkchromecast for direct casting"
+  echo "$url"
+}
+
+do_smart() {
+  _need
+  local title; title=$(_get media-title)
+  [[ -z "$title" ]] && { _err "nothing playing — start a track first"; return 1; }
+  _info "building smart queue from: $title"
+  local results
+  results=$(_do_search "${title} similar songs" 8) || { _err "smart search failed"; return 1; }
+  local added=0
+  echo "$results" | awk -F ' \| ' '{print $NF}' | while IFS= read -r url; do
+    [[ -z "$url" ]] && continue
+    _ipc_loadfile "$url" "append-play"
+    added=$(( added + 1 ))
+    (( added >= 3 )) && break
+  done
+  _queue_snapshot
+  _ok "smart queue added up to 3 related tracks"
+}
+
+do_share() {
+  local name="${1:-queue-$(date +%Y%m%d-%H%M%S)}"
+  name=$(printf '%s' "$name" | tr -cd '[:alnum:]_-')
+  [[ -z "$name" ]] && name="queue-$(date +%Y%m%d-%H%M%S)"
+  local out="$SHARE_DIR/${name}.m3u"
+
+  if [ -S "$SOCKET" ]; then
+    _cmd '{"command":["get_property","playlist"]}' \
+      | "$JQ" -r '.data[]?.filename // empty' 2>/dev/null > "$out"
+  elif [[ -f "$QUEUE_SNAPSHOT" ]]; then
+    cp "$QUEUE_SNAPSHOT" "$out"
+  else
+    _err "no running queue or saved queue snapshot to share"
+    return 1
+  fi
+
+  if [[ ! -s "$out" ]]; then
+    rm -f "$out"
+    _err "queue is empty"
+    return 1
+  fi
+  _ok "shareable playlist written: $out"
+  echo "  import on another mox install with:"
+  echo "    mox import \"$out\""
+}
+
+do_scan() {
+  local mode="${1:-}"
+  [[ -f "$LOCAL_INDEX" ]] || { _err "no local index — run: mox index first"; return 1; }
+  case "$mode" in
+    --duplicates|duplicates)
+      awk -F'\t' '{key=tolower($2); paths[key]=paths[key] "\n  " $1; count[key]++} END{for(k in count) if(count[k]>1) print k paths[k] "\n"}' "$LOCAL_INDEX"
+      ;;
+    --unplayed|unplayed)
+      awk -F'\t' 'NR==FNR{seen[tolower($3)]=1; next} !seen[tolower($2)]{print $2 "\t" $1}' "$HISTORY_FILE" "$LOCAL_INDEX" | head -100
+      ;;
+    --playlist|playlist)
+      local label="${2:-local-mix}"
+      local safe_label; safe_label=$(printf '%s' "$label" | tr -cd '[:alnum:]_-')
+      [[ -z "$safe_label" ]] && safe_label="local-mix"
+      local out="$PLAYLIST_DIR/${safe_label}.m3u"
+      awk -F'\t' '{print $1}' "$LOCAL_INDEX" | head -100 > "$out"
+      _ok "generated playlist: $safe_label ($(wc -l < "$out" | tr -d ' ') tracks)"
+      ;;
+    *)
+      echo "usage: mox scan --duplicates | --unplayed | --playlist <name>"
+      ;;
+  esac
+}
+
+do_schedule() {
+  local when="${1:-}" query="${2:-}"
+  [[ -z "$when" || -z "$query" ]] && { _err "usage: mox schedule \"HH:MM [tomorrow]\" \"query or playlist\""; return 1; }
+  mkdir -p "$SCHEDULE_DIR"
+  local hour minute day_offset=0
+  if [[ "$when" =~ '([0-9]{1,2}):([0-9]{2})' ]]; then
+    hour="${match[1]}"; minute="${match[2]}"
+  else
+    _err "schedule time must include HH:MM"
+    return 1
+  fi
+  [[ "$when" == *tomorrow* ]] && day_offset=1
+  local stamp label script
+  stamp=$(date +%Y%m%d%H%M%S)
+  label="mox.schedule.${stamp}"
+  script="$SCHEDULE_DIR/${label}.sh"
+  local mox_bin; mox_bin=$(command -v mox 2>/dev/null || printf '%s' "${0:a}")
+  cat > "$script" <<EOF
+#!/bin/sh
+exec "$mox_bin" "$query"
+EOF
+  chmod +x "$script"
+
+  if [[ "$OS" == "mac" ]]; then
+    local plist="$SCHEDULE_DIR/${label}.plist"
+    local y m d
+    y=$(date -v+"${day_offset}"d +%Y 2>/dev/null || date +%Y)
+    m=$(date -v+"${day_offset}"d +%m 2>/dev/null || date +%m)
+    d=$(date -v+"${day_offset}"d +%d 2>/dev/null || date +%d)
+    cat > "$plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>$label</string>
+<key>ProgramArguments</key><array><string>$script</string></array>
+<key>StartCalendarInterval</key><dict>
+<key>Year</key><integer>$y</integer><key>Month</key><integer>$m</integer><key>Day</key><integer>$d</integer>
+<key>Hour</key><integer>$hour</integer><key>Minute</key><integer>$minute</integer>
+</dict>
+<key>StandardOutPath</key><string>$DATA_DIR/schedule.log</string>
+<key>StandardErrorPath</key><string>$DATA_DIR/schedule.log</string>
+</dict></plist>
+EOF
+    if [[ -n "${MOX_TEST_MODE:-}" ]]; then
+      _ok "created launchd plist: $plist"
+    else
+      launchctl load "$plist" 2>/dev/null && _ok "scheduled via launchd: $when → $query" || _warn "created launchd plist: $plist"
+    fi
+  elif command -v at >/dev/null 2>&1; then
+    printf '%s\n' "$script" | at "$when"
+    _ok "scheduled via at: $when → $query"
+  else
+    _warn "created runnable schedule script; install at/launchd support to auto-run it"
+    echo "$script"
+  fi
 }
 
 # ── mox doctor ─────────────────────────────────────────────────────────────────
 do_doctor() {
   echo ""
-  echo "  ${C}m doctor — system diagnostics (v5)${X}"
+  echo "  ${C}mox doctor — system diagnostics (v7.2.2)${X}"
   echo "  $(date)"
   echo ""
   echo "  ${W}Dependencies:${X}"
@@ -3528,6 +3766,7 @@ do_doctor() {
         CHAFA)   ver=$("$bin_path" --version 2>/dev/null | head -1) ;;
         FFPROBE) ver=$("$bin_path" -version 2>/dev/null | head -1) ;;
       esac
+      [[ ${#ver} -gt 46 ]] && ver="${ver[1,43]}..."
       printf "  ${G}✔${X}  %-8s  %s\n" "$bin_var" "${ver:-unknown version}"
     else
       local optional=""
@@ -3539,10 +3778,10 @@ do_doctor() {
 
   # API keys status
   echo "  ${W}API Keys:${X}"
-  printf "  YOUTUBE_API_KEY:   %s\n" "${YOUTUBE_API_KEY:+✔ set (fast API search enabled)}"
-  printf "  INVIDIOUS_HOST:    %s\n" "${INVIDIOUS_HOST:+✔ set (Invidious search enabled)}"
-  printf "  LASTFM_API_KEY:    %s\n" "${LASTFM_API_KEY:+✔ set (real similar tracks enabled)}"
-  printf "  SCROBBLE_URL:      %s\n" "${SCROBBLE_URL:+✔ set}"
+  printf "  YOUTUBE_API_KEY:   %s\n" "$([[ -n "$YOUTUBE_API_KEY" ]] && echo "✔ set (fast API search enabled)" || echo "not set")"
+  printf "  INVIDIOUS_HOST:    %s\n" "$([[ -n "$INVIDIOUS_HOST" ]] && echo "✔ set (Invidious search enabled)" || echo "not set")"
+  printf "  LASTFM_API_KEY:    %s\n" "$([[ -n "$LASTFM_API_KEY" ]] && echo "✔ set (real similar tracks enabled)" || echo "not set")"
+  printf "  SCROBBLE_URL:      %s\n" "$([[ -n "$SCROBBLE_URL" ]] && echo "✔ set" || echo "not set")"
   [[ -z "$YOUTUBE_API_KEY$INVIDIOUS_HOST" ]] && \
     printf "  ${Y}→ tip: set YOUTUBE_API_KEY or INVIDIOUS_HOST in config for instant search${X}\n"
   echo ""
@@ -3587,9 +3826,11 @@ do_doctor() {
   [ -f "$HISTORY_FILE" ] && history_lines=$(wc -l < "$HISTORY_FILE" | tr -d ' ')
   [ -f "$LIKES_FILE"   ] && likes_lines=$(wc -l < "$LIKES_FILE"   | tr -d ' ')
   [ -f "$BOOKMARKS_FILE" ] && bm_lines=$(wc -l < "$BOOKMARKS_FILE" | tr -d ' ')
-  printf "  history:   %s entries\n" "$history_lines"
-  printf "  likes:     %s entries\n" "$likes_lines"
-  printf "  bookmarks: %s entries\n" "$bm_lines"
+  (( history_lines == 0 && likes_lines == 0 && bm_lines == 0 )) && \
+    printf "  ${G}✔${X}  ready (history, likes, and bookmarks will fill as you listen)\n"
+  (( history_lines > 0 )) && printf "  history:   %s entries\n" "$history_lines"
+  (( likes_lines > 0 )) && printf "  likes:     %s entries\n" "$likes_lines"
+  (( bm_lines > 0 )) && printf "  bookmarks: %s entries\n" "$bm_lines"
   if [ -f "$LOCAL_INDEX" ]; then
     printf "  local lib: %s tracks indexed\n" "$(wc -l < "$LOCAL_INDEX" | tr -d ' ')"
   fi
@@ -3597,7 +3838,8 @@ do_doctor() {
 
   echo "  ${W}Cache:${X}"
   local cache_total=0 cache_expired=0
-  for f in "$CACHE_DIR"/*.cache; do
+  local cache_files=("$CACHE_DIR"/*.cache(N))
+  for f in "${cache_files[@]}"; do
     [ -f "$f" ] || continue
     cache_total=$(( cache_total + 1 ))
     [ "$(_cache_age "$f")" -ge "$CACHE_TTL" ] && cache_expired=$(( cache_expired + 1 ))
@@ -3680,6 +3922,17 @@ _load_plugins() {
   setopt nullglob 2>/dev/null || shopt -s nullglob 2>/dev/null
   for plugin in "$PLUGINS_DIR"/*.zsh; do
     [ -f "$plugin" ] || continue
+    local exports
+    exports=$(grep -E '^[[:space:]]*(function[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*(\(\))?[[:space:]]*\{' "$plugin" 2>/dev/null \
+      | sed -E 's/^[[:space:]]*function[[:space:]]+//; s/[[:space:]]*\(\).*//; s/[[:space:]]*\{.*//')
+    if echo "$exports" | grep -Ev '^(do_|_plugin_)' >/dev/null 2>&1; then
+      _warn "plugin skipped (only do_* exports allowed): $(basename "$plugin")"
+      continue
+    fi
+    if echo "$exports" | grep -E '^(do_play|do_stop|do_start|do_help|do_update)$' >/dev/null 2>&1; then
+      _warn "plugin skipped (core command override blocked): $(basename "$plugin")"
+      continue
+    fi
     source "$plugin" 2>/dev/null && _info "plugin loaded: $(basename "$plugin")" || \
       _warn "plugin error: $(basename "$plugin")"
   done
@@ -3690,6 +3943,8 @@ _load_plugins
 
 # ── Phase 2.1: Custom equalizer bands ───────────────────────────
 do_eq_custom() {
+  # Dispatcher passes the full argv vector: "eq custom <freq gain...>".
+  # Keep these shifts paired with the case arm so plugins should call do_eq instead.
   shift  # consume "eq"
   shift  # consume "custom"
   if [[ $# -lt 2 ]] || (( $# % 2 != 0 )); then
@@ -3819,7 +4074,16 @@ do_queue_save_auto() {
 
 # ── Phase 2.6: Search without playing ───────────────────────────
 do_search_only() {
-  local query="${*:-}"
+  local show_urls=0
+  local -a qparts
+  qparts=()
+  for part in "$@"; do
+    case "$part" in
+      --urls) show_urls=1 ;;
+      *) qparts+=("$part") ;;
+    esac
+  done
+  local query="${(j: :)qparts}"
   [[ -z "$query" ]] && { _err "usage: mox search <query>"; return 1; }
   local results
   results=$(_do_search "$query") || { _err 5 "search failed"; return 1; }
@@ -3827,7 +4091,13 @@ do_search_only() {
   echo ""
   echo "  ${C}search: ${query}${X}"
   echo ""
-  echo "$results" | awk -F ' \| ' '{printf "  %-50s %8s  %s\n", substr($1,1,50), $2, $3}' | head -30
+  if [[ $show_urls -eq 1 ]]; then
+    echo "$results" | awk -F ' \| ' '{printf "  %-46s %8s  %s\n", substr($1,1,46), $2, $3}' | head -30
+  else
+    echo "$results" | awk -F ' \| ' '{printf "  %2d. %-58s %8s\n", NR, substr($1,1,58), $2}' | head -30
+    echo ""
+    echo "  ${C}tip:${X} add --urls to show source links"
+  fi
   echo ""
 }
 
@@ -3974,7 +4244,7 @@ do_completions() {
 # mox — zsh completion
 _mox_completions() {
   local -a cmds
-  cmds=(pause next prev stop start shuffle repeat repeat-one clear now bar lyrics art ui uxi uxi-stop scrub queue qmove qrm status hp speakers devices playlists save load pldel import dl dl-list txt txts txtnext txtprev txtnow txtpick txtedit txt-export vol seek speed like unlike likes likes-play love similar history history-clear replay eq eq\ custom norm sleep export update doctor queue-restore log log-clear cache-clear cache-prune cache-stats autodj bookmark bookmarks bookmark-load index local reload-config crossfade queue-dedup pin pins queue-save-auto search radio chapter stats config-edit notify-toggle auto-restart-toggle history-stats completions help version)
+  cmds=(pause next prev stop start shuffle repeat repeat-one clear now bar lyrics art ui uxi uxi-stop scrub queue qmove qrm status hp speakers devices playlists save load pldel import dl dl-list txt txts txtnext txtprev txtnow txtpick txtedit txt-export vol seek speed like unlike likes likes-play love similar smart history history-clear replay eq eq\ custom norm sleep export update doctor queue-restore log log-clear cache-clear cache-prune cache-stats autodj bookmark bookmarks bookmark-load index local scan share schedule reload-config crossfade queue-dedup pin pins queue-save-auto search radio chapter stats config-edit notify-toggle auto-restart-toggle history-stats completions help version)
   _describe 'mox' cmds
 }
 compdef _mox_completions mox
@@ -3985,7 +4255,7 @@ COMPLETIONS
 do_help() {
   cat <<EOF
 
-  ${C}mox — terminal music CLI${X}   (v6 "God Tier")
+  ${C}mox — terminal music CLI${X}   (v7.2.2)
   data: ~/music_system/   config: $CONFIG_FILE
   log:  $MPV_LOG
 
@@ -4072,6 +4342,7 @@ do_help() {
     history-clear          wipe history
     replay / rl            replay the last played track
     similar                add similar track (Last.fm or YouTube)
+    smart                  add up to 3 related tracks to the queue
     stats                  listening stats (total, unique, most played, top 10)
 
   ${W}TXT PLAYLISTS${X}
@@ -4093,6 +4364,11 @@ do_help() {
   ${W}LOCAL LIBRARY (v5)${X}
     index                  scan \$LOCAL_MUSIC_DIR with ffprobe, build index
     local [query]          fzf-search & play from local library
+    scan --duplicates      find duplicate indexed titles
+    scan --unplayed        show indexed tracks not yet in history
+    scan --playlist <name> create playlist from local index
+    share [name]           write current queue as shareable m3u
+    schedule "HH:MM" "q"   schedule playback via launchd/at
 
   ${W}DOWNLOAD & IMPORT${X}
     dl "query"             download as MP3 (progress visible)
@@ -4148,9 +4424,21 @@ EOF
 }
 
 # ── main dispatch ─────────────────────────────────────────────
-_check_ytdlp_age
-
-[ $# -eq 0 ] && { do_status; exit 0; }
+if [ $# -eq 0 ]; then
+  if [ ! -S "$SOCKET" ]; then
+    echo ""
+    echo "  ${B}mox${X} — terminal music CLI"
+    echo "  run: ${G}mox help${X} for all commands"
+    echo ""
+    echo "  Quick start:"
+    echo "    ${G}mox \"lofi hip hop\"${X}    search & play"
+    echo "    ${G}mox uxi${X}                 open web UI"
+    echo ""
+  else
+    do_status
+  fi
+  exit 0
+fi
 
 case "$1" in
   --version|-V|version) do_version;                   exit 0 ;;
@@ -4202,6 +4490,7 @@ case "$1" in
   likes-play|lp)       do_likes_play;              exit 0 ;;
   love)                do_love;                    exit 0 ;;
   similar)             do_similar;                 exit 0 ;;
+  smart)               do_smart;                   exit 0 ;;
   history|hist)        do_history;                 exit 0 ;;
   history-clear)       do_history_clear;           exit 0 ;;
   replay|rl)           do_replay;                  exit 0 ;;
@@ -4211,7 +4500,7 @@ case "$1" in
   pin)                 do_pin "${2:-}";            exit 0 ;;
   pins)                do_pins;                   exit 0 ;;
   queue-save-auto)      do_queue_save_auto;       exit 0 ;;
-  search)              do_search_only "${*:2}"; exit 0 ;;
+  search)              shift; do_search_only "$@"; exit 0 ;;
   radio)               do_radio "${2:-}";         exit 0 ;;
   chapter)              do_chapter;               exit 0 ;;
   stats)               do_stats;                  exit 0 ;;
@@ -4237,6 +4526,9 @@ case "$1" in
   bookmark-load|bl)    do_bookmark_load;           exit 0 ;;
   index)               do_index;                   exit 0 ;;
   local)               do_local "${2:-}";          exit 0 ;;
+  scan)                do_scan "${2:-}" "${3:-}";  exit 0 ;;
+  share)               do_share "${2:-}";          exit 0 ;;
+  schedule)            do_schedule "${2:-}" "${3:-}"; exit 0 ;;
   reload-config)       do_reload_config;           exit 0 ;;
   cast)                do_cast;                    exit 0 ;;
   help|-h|--help)      do_help;                    exit 0 ;;

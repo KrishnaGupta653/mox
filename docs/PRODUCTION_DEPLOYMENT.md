@@ -51,10 +51,10 @@ brew upgrade mox
 ### Debian/Ubuntu
 ```bash
 # Download .deb package
-wget https://github.com/KrishnaGupta653/mox/releases/latest/download/mox-cli_6.0.0_all.deb
+wget https://github.com/KrishnaGupta653/mox/releases/latest/download/mox-cli_7.2.2_all.deb
 
 # Install
-sudo dpkg -i mox-cli_6.0.0_all.deb
+sudo dpkg -i mox-cli_7.2.2_all.deb
 sudo apt-get install -f  # Fix dependencies if needed
 ```
 
@@ -419,4 +419,4 @@ sudo logrotate -f /etc/logrotate.d/mox
 
 ---
 
-**Note**: This deployment guide assumes mox CLI v6.0.0 or later. For older versions, please refer to the version-specific documentation.
+**Note**: This deployment guide assumes mox CLI v7.2.2 or later. For older versions, please refer to the version-specific documentation.

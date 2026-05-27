@@ -66,6 +66,38 @@
     gap: 16px;
   }
 
+  body.mini .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    width: 320px;
+    min-height: 80px;
+    max-width: 320px;
+    padding: 8px;
+    gap: 0;
+  }
+
+  body.mini .header,
+  body.mini .main,
+  body.mini .cmd-bar,
+  body.mini .stats-grid,
+  body.mini .progress-wrap,
+  body.mini .track-meta,
+  body.mini .volume-row {
+    display: none;
+  }
+
+  body.mini .sidebar,
+  body.mini .now-playing {
+    min-height: 80px;
+    padding: 8px;
+  }
+
+  body.mini .track-art { display: none; }
+  body.mini .track-title { font-size: 12px; margin-bottom: 6px; }
+  body.mini .controls { gap: 8px; justify-content: flex-start; }
+  body.mini .ctrl-btn { font-size: 12px; padding: 4px; }
+  body.mini .ctrl-btn.primary { width: 34px; height: 34px; }
+
   /* ── HEADER ── */
   .header {
     grid-column: 1 / -1;
@@ -136,6 +168,21 @@
   @keyframes pulse {
     0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(200,255,90,0.4); }
     50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(200,255,90,0); }
+  }
+  
+  @keyframes spin-loader {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  
+  .loading-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--dim);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin-loader 0.6s linear infinite;
   }
 
   /* ── SIDEBAR ── */
@@ -385,6 +432,21 @@
   .queue-list::-webkit-scrollbar-track { background: transparent; }
   .queue-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
+  .queue-filter {
+    width: 100%;
+    margin-bottom: 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    outline: none;
+    padding: 9px 10px;
+  }
+
+  .queue-filter::placeholder { color: var(--dim); }
+
   .queue-item {
     display: flex;
     align-items: center;
@@ -399,6 +461,15 @@
   }
 
   .queue-item:hover { background: var(--surface2); border-color: var(--border); }
+
+  .queue-item.dragging {
+    opacity: 0.45;
+    border-color: var(--accent);
+  }
+
+  .queue-item.drag-over {
+    box-shadow: inset 0 2px 0 var(--accent);
+  }
 
   .queue-item.active {
     background: var(--surface2);
@@ -425,6 +496,50 @@
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
+  }
+
+  .queue-thumb {
+    width: 38px;
+    height: 28px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+    background: var(--surface2);
+  }
+
+  .queue-thumb.empty { display: none; }
+
+  .auth-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: rgba(10,10,11,0.92);
+    place-items: center;
+  }
+
+  .auth-overlay.show { display: grid; }
+
+  .auth-box {
+    width: min(320px, calc(100vw - 32px));
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+  }
+
+  .auth-box h2 { font-size: 16px; margin-bottom: 10px; }
+
+  .auth-box input {
+    width: 100%;
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
   }
 
   .queue-item.active .queue-item-title { color: var(--accent); }
@@ -551,6 +666,7 @@
     border-radius: 10px;
     padding: 10px 16px;
     flex-wrap: wrap;
+    position: relative;
   }
 
   .cmd-prefix { color: var(--accent); font-size: 13px; }
@@ -587,6 +703,48 @@
   }
 
   .cmd-hint:hover { color: var(--accent); border-color: rgba(200,255,90,0.3); }
+
+  .cmd-pending {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .cmd-bar.pending .cmd-pending { display: inline-flex; }
+
+  .cmd-suggestions {
+    display: none;
+    position: absolute;
+    left: 44px;
+    right: 16px;
+    bottom: calc(100% + 8px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+    overflow: hidden;
+    z-index: 120;
+  }
+
+  .cmd-suggestions.show { display: block; }
+
+  .cmd-suggestion {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 9px 11px;
+    cursor: pointer;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .cmd-suggestion:last-child { border-bottom: 0; }
+  .cmd-suggestion:hover { background: var(--surface2); color: var(--accent); }
+  .cmd-suggestion small { color: var(--muted); text-align: right; }
 
   /* ── TAGS ── */
   .tag {
@@ -690,9 +848,26 @@
     transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
     z-index: 200;
     pointer-events: none;
+    max-width: 90%;
+    text-align: center;
   }
 
   .toast.show { transform: translateX(-50%) translateY(0); }
+  
+  .toast.error {
+    border-color: var(--accent3);
+    color: var(--accent3);
+  }
+  
+  .toast.success {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  
+  .toast.info {
+    border-color: var(--accent2);
+    color: var(--accent2);
+  }
 
   /* ── RESPONSIVE ── */
   @media (max-width: 768px) {
@@ -708,13 +883,27 @@
     .controls { gap: 12px; }
     .ctrl-btn.primary { width: 44px; height: 44px; }
     .shortcut-grid { grid-template-columns: 1fr; }
+    .track-art { margin-bottom: 16px; }
+    .vinyl { width: 100px; height: 100px; }
   }
 
   @media (max-width: 480px) {
-    .layout { padding: 8px; }
+    .layout { padding: 8px; gap: 8px; }
     .now-playing { padding: 16px; }
     .cmd-bar { padding: 8px 12px; }
     .cmd-hints { display: none; }
+    .cmd-suggestions { left: 12px; right: 12px; }
+    .track-art { display: none; }
+    .track-title { font-size: 18px; }
+    .controls { gap: 8px; }
+    .ctrl-btn { padding: 6px; font-size: 14px; }
+    .ctrl-btn.primary { width: 52px; height: 52px; font-size: 16px; }
+    .vinyl { width: 80px; height: 80px; }
+    .stats-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+    .stat-cell { padding: 8px 6px; }
+    .stat-val { font-size: 14px; }
+    .stat-lbl { font-size: 8px; letter-spacing: 0.5px; }
+    .header-right { width: 100%; justify-content: space-between; }
   }
 
   /* Scrolling track title */
@@ -753,14 +942,14 @@
 
   <!-- HEADER -->
   <header class="header">
-    <div class="logo">mox<span>terminal music CLI v6 · <kbd style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:11px;color:var(--accent)">mox uxi</kbd> to open</span></div>
+    <div class="logo">mox<span>terminal music CLI v7.2.2 · <kbd style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:11px;color:var(--accent)">mox uxi</kbd> to open</span></div>
     <div class="header-right">
-      <span class="tag tag-green" id="autodj-badge" style="display:none">🤖 auto-dj</span>
-      <span class="tag tag-pink" id="repeat-badge" style="display:none">🔁 repeat</span>
-      <span class="tag tag-cyan" id="loop-one-badge" style="display:none">🔂 loop one</span>
+      <span class="tag tag-green" id="autodj-badge" style="display:none" role="status" aria-label="Auto-DJ enabled">🤖 auto-dj</span>
+      <span class="tag tag-pink" id="repeat-badge" style="display:none" role="status" aria-label="Repeat enabled">🔁 repeat</span>
+      <span class="tag tag-cyan" id="loop-one-badge" style="display:none" role="status" aria-label="Loop one enabled">🔂 loop one</span>
       <button class="theme-toggle" id="theme-toggle" title="Toggle dark/light mode" aria-label="Toggle theme">🌙</button>
       <div class="status-badge">
-        <div class="status-dot" id="status-dot"></div>
+        <div class="status-dot" id="status-dot" role="status" aria-live="polite"></div>
         <span id="daemon-status">connecting…</span>
       </div>
     </div>
@@ -849,6 +1038,7 @@
           <button class="eq-btn" onclick="cmd('clear')">🗑 clear</button>
         </div>
       </div>
+      <input class="queue-filter" id="queue-filter" placeholder="filter queue" oninput="updateQueue()">
       <div class="queue-list" id="queue-list">
         <div style="color:var(--muted);font-size:12px;padding:20px 0;text-align:center;">
           queue empty — type a song below to play
@@ -883,7 +1073,9 @@
   <div class="cmd-bar">
     <span class="cmd-prefix">mox</span>
     <input class="cmd-input" id="cmd-input" placeholder='search & play: "lofi beats"  or  pause · next · vol 80 · seek +10 · shuffle · repeat'
-           onkeydown="handleCmd(event)">
+           onkeydown="handleCmd(event)" oninput="updateCommandSuggestions()" onfocus="updateCommandSuggestions()" onblur="setTimeout(hideCommandSuggestions, 120)">
+    <span class="cmd-pending"><span class="loading-spinner"></span> running</span>
+    <div class="cmd-suggestions" id="cmd-suggestions"></div>
     <div class="cmd-hints">
       <span class="cmd-hint" onclick="quickPlay('lofi hip hop')">lofi</span>
       <span class="cmd-hint" onclick="quickPlay('jazz classics')">jazz</span>
@@ -924,6 +1116,15 @@
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<div class="auth-overlay" id="auth-overlay">
+  <div class="auth-box">
+    <h2>mox PIN</h2>
+    <div style="color:var(--muted);font-size:12px;">Enter the PIN printed by <code>mox uxi</code>.</div>
+    <input id="auth-pin" inputmode="numeric" autocomplete="one-time-code" placeholder="6-digit PIN" onkeydown="if(event.key==='Enter') submitPin()">
+    <button class="eq-btn" onclick="submitPin()">unlock</button>
+  </div>
+</div>
+
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
 const state = {
@@ -952,6 +1153,26 @@ const API = (() => {
   return 'http://127.0.0.1:7700';
 })();
 
+const MINI_MODE = new URLSearchParams(window.location.search).get('mini') === '1';
+if (MINI_MODE) document.body.classList.add('mini');
+
+function getCookie(name) {
+  return document.cookie
+    .split(';')
+    .map(part => part.trim())
+    .find(part => part.startsWith(name + '='))
+    ?.split('=')
+    .slice(1)
+    .join('=') || '';
+}
+
+function apiHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'X-Mox-Token': getCookie('mox_token'),
+  };
+}
+
 // ── XSS: Escape HTML ────────────────────────────────────────────────────────
 function escapeHtml(str) {
   if (!str || typeof str !== 'string') return '';
@@ -965,30 +1186,86 @@ function escapeHtml(str) {
 async function apiState() {
   try {
     const r = await fetch(API + '/api/state', {signal: AbortSignal.timeout(3000)});
+    if (!r.ok) {
+      console.error('API state request failed:', r.status);
+      return null;
+    }
     return await r.json();
-  } catch { return null; }
+  } catch (err) {
+    console.error('API state error:', err);
+    return null;
+  }
 }
 
 async function apiCmd(cmdStr) {
   try {
-    await fetch(API + '/api/cmd', {
+    setCommandPending(true);
+    const r = await fetch(API + '/api/cmd', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: apiHeaders(),
       body: JSON.stringify({cmd: cmdStr}),
       signal: AbortSignal.timeout(3000),
     });
-  } catch {}
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({msg: 'Command failed'}));
+      showToast('❌ ' + (data.msg || 'Command failed'));
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('API cmd error:', err);
+    showToast('❌ Connection error');
+    return false;
+  } finally {
+    setCommandPending(false);
+  }
 }
 
 async function apiPlay(query) {
   try {
-    await fetch(API + '/api/play', {
+    setCommandPending(true);
+    const r = await fetch(API + '/api/play', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: apiHeaders(),
       body: JSON.stringify({query}),
       signal: AbortSignal.timeout(3000),
     });
-  } catch {}
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({msg: 'Play failed'}));
+      showToast('❌ ' + (data.msg || 'Play failed'));
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('API play error:', err);
+    showToast('❌ Connection error');
+    return false;
+  } finally {
+    setCommandPending(false);
+  }
+}
+
+async function checkAuth() {
+  try {
+    const r = await fetch(API + '/api/auth', {signal: AbortSignal.timeout(3000)});
+    const data = await r.json();
+    document.getElementById('auth-overlay').classList.toggle('show', data.authRequired && !data.authenticated);
+  } catch (_) {}
+}
+
+async function submitPin() {
+  const pin = document.getElementById('auth-pin').value.trim();
+  const r = await fetch(API + '/api/auth', {
+    method: 'POST',
+    headers: apiHeaders(),
+    body: JSON.stringify({pin}),
+  });
+  if (r.ok) {
+    document.getElementById('auth-overlay').classList.remove('show');
+    showToast('unlocked', 'success');
+  } else {
+    showToast('invalid PIN', 'error');
+  }
 }
 
 // ── SSE + Polling ───────────────────────────────────────────────────────────
@@ -998,16 +1275,27 @@ let pollInterval = null;
 let lastQueueJSON = '';
 const POLL_INTERVAL = 500;
 const SSE_RECONNECT_DELAY = 3000;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
 
 function connectSSE() {
   if (sse) {
     sse.close();
     sse = null;
   }
+  
+  // Don't retry indefinitely
+  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    console.warn('Max SSE reconnect attempts reached, using polling only');
+    fallbackToPolling();
+    return;
+  }
+  
   try {
     sse = new EventSource(API + '/api/events');
     sse.onopen = () => {
       state.connecting = false;
+      reconnectAttempts = 0; // Reset on successful connection
       if (pollInterval) {
         clearInterval(pollInterval);
         pollInterval = null;
@@ -1027,14 +1315,24 @@ function connectSSE() {
           updateQueue();
         }
         updateLyrics();
-      } catch (_) {}
+      } catch (err) {
+        console.error('SSE message parse error:', err);
+      }
     };
     sse.onerror = () => {
+      console.warn('SSE connection error, attempt', reconnectAttempts + 1);
       sse.close();
       sse = null;
-      fallbackToPolling();
+      reconnectAttempts++;
+      
+      if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        setTimeout(connectSSE, SSE_RECONNECT_DELAY);
+      } else {
+        fallbackToPolling();
+      }
     };
-  } catch (_) {
+  } catch (err) {
+    console.error('SSE setup error:', err);
     fallbackToPolling();
   }
 }
@@ -1079,6 +1377,14 @@ function updateNowPlaying() {
   const {title, pos, dur, paused, volume, speed, queue, currentIdx, alive, connecting} = state;
 
   document.getElementById('track-title').textContent = escapeHtml(title || 'nothing playing');
+  
+  // Update browser tab title with now playing
+  if (title && title !== 'nothing playing') {
+    document.title = `♪ ${title} — mox`;
+  } else {
+    document.title = 'mox — music';
+  }
+  
   const metaEl = document.getElementById('track-meta');
   if (connecting && !alive) {
     metaEl.textContent = '— connecting… —';
@@ -1140,12 +1446,24 @@ function updateNowPlaying() {
 function updateQueue() {
   const {queue, currentIdx, paused} = state;
   const el = document.getElementById('queue-list');
+  const filterEl = document.getElementById('queue-filter');
+  const filter = (filterEl?.value || '').trim().toLowerCase();
   if (!queue.length) {
     el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:20px 0;text-align:center;">queue empty — type a song below to play</div>';
     return;
   }
-  el.innerHTML = queue.map((item, i) => {
+  const rows = queue
+    .map((item, i) => ({item, i}))
+    .filter(({item}) => !filter || (item.title || '').toLowerCase().includes(filter));
+
+  if (!rows.length) {
+    el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:20px 0;text-align:center;">no queue matches</div>';
+    return;
+  }
+
+  el.innerHTML = rows.map(({item, i}) => {
     const title = escapeHtml(item.title || 'Unknown');
+    const thumb = youtubeThumb(item.url || item.title || '');
     const active = i === currentIdx;
     const bars = active ? `
       <div class="playing-bars">
@@ -1155,15 +1473,23 @@ function updateQueue() {
       </div>
     ` : `<span class="queue-num">${i + 1}</span>`;
     return `
-    <div class="queue-item ${active ? 'active' : ''}" onclick="playQueueItem(${i})">
+    <div class="queue-item ${active ? 'active' : ''}" onclick="playQueueItem(${i})" data-queue-idx="${i}" draggable="true"
+         ondragstart="queueDragStart(event, ${i})" ondragover="queueDragOver(event)" ondragleave="queueDragLeave(event)" ondrop="queueDrop(event, ${i})" ondragend="queueDragEnd(event)">
       ${bars}
+      <img class="queue-thumb ${thumb ? '' : 'empty'}" src="${thumb}" alt="">
       <span class="queue-item-title">${title}</span>
-      <button class="queue-item-remove" onclick="event.stopPropagation();removeQueueItem(${i})" title="Remove from queue">✕</button>
+      <button class="queue-item-remove" onclick="event.stopPropagation();removeQueueItem(${i})" title="Remove from queue" aria-label="Remove ${title}">✕</button>
     </div>`;
   }).join('');
 
   const active = el.querySelector('.active');
   if (active) active.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+function youtubeThumb(value) {
+  const raw = String(value || '');
+  const match = raw.match(/(?:v=|youtu\.be\/|shorts\/)([A-Za-z0-9_-]{11})/);
+  return match ? `https://img.youtube.com/vi/${match[1]}/default.jpg` : '';
 }
 
 function updateLyrics() {
@@ -1175,6 +1501,7 @@ function updateLyrics() {
       el.innerHTML = '<div class="lyric-line active">♪ no lyrics loaded</div><div class="lyric-line">play a song to see lyrics</div>';
     } else if (lyrics === 'loading') {
       el.innerHTML = '<div class="lyric-line active">♪ fetching lyrics…</div>';
+      scheduleLyricsRefresh();
     } else if (lyrics === 'not_found') {
       el.innerHTML = '<div class="lyric-line active">♪ no lyrics found</div><div class="lyric-line">try: mox lyrics</div>';
     } else {
@@ -1208,53 +1535,144 @@ function updateLyrics() {
 
 // ── Commands ───────────────────────────────────────────────────────────────
 
-function cmd(command) {
-  apiCmd(command);
-  showToast('→ ' + command);
+async function cmd(command) {
+  const success = await apiCmd(command);
+  if (success) {
+    showToast('→ ' + command);
+  }
 }
 
-function setVolume(val) {
+function setCommandPending(isPending) {
+  document.querySelector('.cmd-bar')?.classList.toggle('pending', isPending);
+}
+
+// Debounce timer for volume slider
+let volDebounceTimer;
+
+async function setVolume(val) {
   const v = Math.max(0, Math.min(150, parseInt(val)));
-  apiCmd('vol ' + v);
+  
+  // Update UI immediately for responsiveness
+  document.getElementById('vol-val').textContent = v + '%';
+  
+  // Debounce the API call to prevent spam
+  clearTimeout(volDebounceTimer);
+  volDebounceTimer = setTimeout(async () => {
+    const success = await apiCmd('vol ' + v);
+    if (success) {
+      showToast('🔊 volume: ' + v + '%');
+    }
+  }, 150);
 }
 
-function setEq(preset) {
+async function setEq(preset) {
+  applyEqPreset(preset);
+  localStorage.setItem('mox-eq-preset', preset);
+  const success = await apiCmd('eq ' + preset);
+  if (success) {
+    showToast('🎚 eq: ' + preset);
+  }
+}
+
+function applyEqPreset(preset) {
   state.eq = preset;
   document.querySelectorAll('.eq-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('eq-' + preset);
   if (btn) btn.classList.add('active');
-  apiCmd('eq ' + preset);
-  showToast('🎚 eq: ' + preset);
 }
 
-function quickPlay(query) {
-  apiPlay(query);
-  showToast('🎵 playing: ' + query);
+async function quickPlay(query) {
+  showToast('🔍 searching: ' + query);
+  const success = await apiPlay(query);
+  if (success) {
+    showToast('🎵 playing: ' + query);
+  }
 }
 
-function playQueueItem(idx) {
-  apiCmd('playlist-play-index ' + idx);
-  showToast('▶ track ' + (idx + 1));
+async function playQueueItem(idx) {
+  const success = await apiCmd('playlist-play-index ' + idx);
+  if (success) {
+    showToast('▶ track ' + (idx + 1));
+  }
 }
 
-function removeQueueItem(idx) {
-  apiCmd('qrm ' + (idx + 1));  // qrm uses 1-based position
-  showToast('removed from queue');
+async function removeQueueItem(idx) {
+  if (!Number.isInteger(idx) || idx < 0 || idx >= state.queue.length) {
+    showToast('invalid queue item', 'error');
+    return;
+  }
+  const previousQueue = state.queue.slice();
+  state.queue.splice(idx, 1);
+  updateQueue();
+  const success = await apiCmd('qrm ' + (idx + 1));  // qrm uses 1-based position
+  if (success) {
+    showToast('🗑 removed from queue');
+  } else {
+    state.queue = previousQueue;
+    updateQueue();
+  }
 }
 
-function seekClick(event) {
+let queueDragFrom = null;
+
+function queueDragStart(event, idx) {
+  queueDragFrom = idx;
+  event.currentTarget.classList.add('dragging');
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', String(idx));
+}
+
+function queueDragOver(event) {
+  event.preventDefault();
+  event.currentTarget.classList.add('drag-over');
+}
+
+function queueDragLeave(event) {
+  event.currentTarget.classList.remove('drag-over');
+}
+
+async function queueDrop(event, toIdx) {
+  event.preventDefault();
+  event.currentTarget.classList.remove('drag-over');
+  const fromIdx = queueDragFrom ?? parseInt(event.dataTransfer.getData('text/plain'), 10);
+  queueDragFrom = null;
+  if (!Number.isInteger(fromIdx) || fromIdx === toIdx) return;
+
+  const previousQueue = state.queue.slice();
+  const [moved] = state.queue.splice(fromIdx, 1);
+  state.queue.splice(toIdx, 0, moved);
+  updateQueue();
+  const success = await apiCmd(`qmove ${fromIdx + 1} ${toIdx + 1}`);
+  if (!success) {
+    state.queue = previousQueue;
+    updateQueue();
+  }
+}
+
+function queueDragEnd(event) {
+  queueDragFrom = null;
+  document.querySelectorAll('.queue-item.dragging,.queue-item.drag-over').forEach(el => {
+    el.classList.remove('dragging', 'drag-over');
+  });
+}
+
+async function seekClick(event) {
   if (!state.dur || state.dur <= 0) return;
   const rect = event.currentTarget.getBoundingClientRect();
   const x = event.clientX - rect.left;
   const pct = x / rect.width;
   const target = Math.round(pct * state.dur);
-  apiCmd('seek ' + target);
-  showToast('⏩ ' + fmtTime(target));
+  const success = await apiCmd('seek ' + target);
+  if (success) {
+    showToast('⏩ ' + fmtTime(target));
+  }
 }
 
-function seekToLyric(t) {
-  apiCmd('seek ' + t);
-  showToast('⏩ ' + fmtTime(t));
+async function seekToLyric(t) {
+  const success = await apiCmd('seek ' + t);
+  if (success) {
+    showToast('⏩ ' + fmtTime(t));
+  }
 }
 
 // ── Dark/Light theme ───────────────────────────────────────────────────────
@@ -1303,25 +1721,83 @@ const knownCmds = new Set([
   'pin','pins','radio','stats','search','chapter','queue-dedup','crossfade','queue-fzf','config-edit','notify','completions','queue-save-auto','history-stats'
 ]);
 
-function handleCmd(e) {
+const COMMAND_HINTS = {
+  pause: 'Toggle playback',
+  next: 'Next track',
+  prev: 'Previous track',
+  vol: 'Set volume, e.g. vol 80',
+  seek: 'Seek seconds, e.g. seek +10',
+  eq: 'Preset: flat, bass, treble, vocal, loud',
+  speed: 'Playback speed 0.25-4.0',
+  shuffle: 'Shuffle queue',
+  repeat: 'Toggle repeat',
+  'repeat-one': 'Loop current track',
+  like: 'Like current track',
+  lyrics: 'Fetch/show lyrics',
+  qmove: 'Move queue item',
+  qrm: 'Remove queue item',
+  clear: 'Clear queue',
+  autodj: 'Toggle Auto-DJ',
+};
+
+function updateCommandSuggestions() {
+  const input = document.getElementById('cmd-input');
+  const box = document.getElementById('cmd-suggestions');
+  const raw = input.value.trim();
+  if (!raw) {
+    hideCommandSuggestions();
+    return;
+  }
+  const token = raw.split(/\s+/)[0].toLowerCase();
+  const matches = Object.entries(COMMAND_HINTS)
+    .filter(([cmdName]) => cmdName.startsWith(token))
+    .slice(0, 6);
+  if (!matches.length) {
+    hideCommandSuggestions();
+    return;
+  }
+  box.innerHTML = matches.map(([cmdName, desc]) => `
+    <div class="cmd-suggestion" onmousedown="chooseCommandSuggestion('${cmdName}')">
+      <span>${escapeHtml(cmdName)}</span><small>${escapeHtml(desc)}</small>
+    </div>
+  `).join('');
+  box.classList.add('show');
+}
+
+function chooseCommandSuggestion(cmdName) {
+  const input = document.getElementById('cmd-input');
+  input.value = cmdName + ' ';
+  input.focus();
+  hideCommandSuggestions();
+}
+
+function hideCommandSuggestions() {
+  document.getElementById('cmd-suggestions')?.classList.remove('show');
+}
+
+async function handleCmd(e) {
   if (e.key === 'Enter') {
     const val = e.target.value.trim();
     if (!val) return;
     cmdHistory.push(val);
     cmdHistoryIdx = cmdHistory.length;
     e.target.value = '';
+    hideCommandSuggestions();
 
     const first = val.split(/\s+/)[0];
 
     if (first === 'eq') {
       const preset = val.split(/\s+/)[1];
-      if (preset) setEq(preset);
-      else showToast('eq presets: flat bass treble vocal loud');
+      if (preset) {
+        await setEq(preset);
+      } else {
+        showToast('eq presets: flat bass treble vocal loud', 'info');
+      }
     } else if (knownCmds.has(first)) {
-      cmd(val);
+      await cmd(val);
     } else {
-      apiPlay(val);
-      showToast('🎵 searching: ' + val);
+      showToast('🔍 searching: ' + val, 'info');
+      await apiPlay(val);
     }
   }
   if (e.key === 'ArrowUp') {
@@ -1343,6 +1819,28 @@ function handleCmd(e) {
   }
 }
 
+let lyricsRefreshTimer = null;
+let lyricsRefreshAttempts = 0;
+
+function scheduleLyricsRefresh() {
+  if (lyricsRefreshTimer) return;
+  lyricsRefreshAttempts = 0;
+  const titleAtStart = state.title;
+  lyricsRefreshTimer = setInterval(async () => {
+    lyricsRefreshAttempts++;
+    if (lyricsRefreshAttempts > 15 || state.title !== titleAtStart || state.lyrics !== 'loading') {
+      clearInterval(lyricsRefreshTimer);
+      lyricsRefreshTimer = null;
+      return;
+    }
+    const data = await apiState();
+    if (data) {
+      Object.assign(state, data);
+      updateLyrics();
+    }
+  }, 1000);
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 function fmtTime(s) {
   s = Math.floor(s || 0);
@@ -1350,12 +1848,12 @@ function fmtTime(s) {
 }
 
 let toastTimer;
-function showToast(msg) {
+function showToast(msg, type = 'success') {
   const el = document.getElementById('toast');
   el.textContent = msg;
-  el.classList.add('show');
+  el.className = 'toast show ' + type;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
 }
 
 // ── Keyboard shortcuts ─────────────────────────────────────────────────────
@@ -1390,13 +1888,15 @@ document.addEventListener('keydown', (e) => {
 // ── Init ───────────────────────────────────────────────────────────────────
 initTheme();
 document.getElementById('theme-toggle').onclick = toggleTheme;
+applyEqPreset(localStorage.getItem('mox-eq-preset') || 'flat');
+checkAuth();
 
 const lyricsVisible = localStorage.getItem('m-ui-lyrics-visible');
 if (lyricsVisible === 'false') {
   document.getElementById('lyrics-panel').classList.add('hidden');
 }
 
-showToast('connecting to mox daemon… · press ? for shortcuts');
+showToast('🎵 connecting to mox daemon… · press ? for shortcuts', 'info');
 </script>
 </body>
 </html>

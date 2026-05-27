@@ -214,6 +214,12 @@ run_test_suite() {
     
     # Clean up
     rm -f "$output_file"
+
+    if [[ -n "${MOX_TEST_RESULT_DIR:-}" ]]; then
+        printf '%s|%s|%s|%s|%s|%s\n' \
+            "$suite_name" "$exit_code" "$tests_run" "$tests_passed" "$tests_failed" "$duration" \
+            > "$MOX_TEST_RESULT_DIR/$suite_name.result"
+    fi
     
     return $exit_code
 }
@@ -222,11 +228,13 @@ run_parallel_suites() {
     local suites=("$@")
     local pids=()
     local results=()
+    local result_dir
+    result_dir=$(mktemp -d /tmp/mox_parallel_results.XXXXXX)
     
     log "${CYAN}🔄 Running test suites in parallel...${NC}"
     
     for suite in "${suites[@]}"; do
-        (run_test_suite "$suite") &
+        (MOX_TEST_RESULT_DIR="$result_dir" run_test_suite "$suite") &
         pids+=($!)
         results+=("$suite")
     done
@@ -244,6 +252,21 @@ run_parallel_suites() {
             all_passed=1
         fi
     done
+
+    for result_file in "$result_dir"/*.result; do
+        [[ -f "$result_file" ]] || continue
+        IFS='|' read -r _suite _exit tests_run tests_passed tests_failed _duration < "$result_file"
+        SUITES_RUN=$((SUITES_RUN + 1))
+        if [[ "$_exit" -eq 0 ]]; then
+            SUITES_PASSED=$((SUITES_PASSED + 1))
+        else
+            SUITES_FAILED=$((SUITES_FAILED + 1))
+        fi
+        TOTAL_TESTS=$((TOTAL_TESTS + tests_run))
+        TOTAL_PASSED=$((TOTAL_PASSED + tests_passed))
+        TOTAL_FAILED=$((TOTAL_FAILED + tests_failed))
+    done
+    rm -rf "$result_dir"
     
     return $all_passed
 }
@@ -458,9 +481,9 @@ TEST_START_TIME=$(date +%s)
 # Run test suites
 if [[ $PARALLEL -eq 1 ]] && [[ ${#SUITES_TO_RUN[@]} -gt 1 ]]; then
     # Run compatible suites in parallel (avoid performance and security together)
-    local parallel_safe=(basic comprehensive integration commands edge-cases api)
-    local parallel_suites=()
-    local sequential_suites=()
+    parallel_safe=(basic comprehensive integration commands edge-cases api)
+    parallel_suites=()
+    sequential_suites=()
     
     for suite in "${SUITES_TO_RUN[@]}"; do
         if [[ " ${parallel_safe[*]} " =~ " $suite " ]]; then

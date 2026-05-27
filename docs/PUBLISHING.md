@@ -25,8 +25,8 @@ Before publishing a new release:
 
 4. **Create git tag**:
    ```bash
-   git tag -a v6.0.0 -m "Release v6.0.0"
-   git push origin v6.0.0
+   git tag -a v7.2.2 -m "Release v7.2.2"
+   git push origin v7.2.2
    ```
 
 ## 📦 NPM Publishing
@@ -101,7 +101,7 @@ Publishing is automated via GitHub Actions when you create a release:
    # In your homebrew-tap repository
    cp mox.rb Formula/
    git add Formula/mox.rb
-   git commit -m "Update mox to v6.0.0"
+   git commit -m "Update mox to v7.2.2"
    git push origin main
    ```
 
@@ -137,7 +137,7 @@ brew install mox
 
 3. **Test package**:
    ```bash
-   sudo dpkg -i ../mox_6.0.0-1_all.deb
+   sudo dpkg -i ../mox_7.2.2-1_all.deb
    mox help
    sudo dpkg -r mox
    ```
@@ -182,8 +182,8 @@ sudo apt update
 sudo apt install mox
 
 # Or install directly from .deb file
-wget https://github.com/KrishnaGupta653/mox/releases/download/v6.0.0/mox_6.0.0-1_all.deb
-sudo dpkg -i mox_6.0.0-1_all.deb
+wget https://github.com/KrishnaGupta653/mox/releases/download/v7.2.2/mox_7.2.2-1_all.deb
+sudo dpkg -i mox_7.2.2-1_all.deb
 sudo apt-get install -f  # Fix dependencies if needed
 ```
 
@@ -210,7 +210,7 @@ Set these in GitHub repository settings:
 2. **Create GitHub release**:
    ```bash
    # Via GitHub CLI
-   gh release create v6.0.0 --title "v6.0.0" --notes "See CHANGELOG.md"
+   gh release create v7.2.2 --title "v7.2.2" --notes "See CHANGELOG.md"
    
    # Or use GitHub web interface
    ```
