@@ -8,6 +8,9 @@ Connects to mpv's Unix domain socket, exposes HTTP endpoints:
   GET  /api/events    → Server-Sent Events stream for state changes
   POST /api/cmd       → send a command (body: {"cmd": "pause"} or {"cmd": "seek +10"})
   POST /api/play      → play by query (body: {"query": "..."})
+  GET  /api/v2/search → search tracks for the web UI (query param: q)
+  GET  /api/v2/history → paginated play history (page, limit)
+  GET  /api/v2/health → lightweight server/mpv health status
 
 Lyrics are fetched from lrclib.net and cached per track. /api/state never blocks on lyrics;
 returns cached or "loading" state. Background prefetcher keeps cache warm.
@@ -92,10 +95,22 @@ if not MUSIC_ROOT:
     sys.exit(1)
 
 SOCKET_PATH = os.path.join(MUSIC_ROOT, "socket", "mpv.sock")
+HISTORY_FILE = os.path.join(MUSIC_ROOT, "data", "history")
 HTML_DIR = os.path.dirname(os.path.abspath(__file__))
 CSRF_TOKEN = secrets.token_urlsafe(32)
+AUTH_TOKEN = secrets.token_urlsafe(32)
 UXI_AUTH_ENABLED = os.environ.get("UXI_AUTH") == "1"
 UXI_AUTH_PIN = f"{secrets.randbelow(1000000):06d}" if UXI_AUTH_ENABLED else ""
+CSP_HEADER = (
+    "default-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' https://fonts.gstatic.com; "
+    "script-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: https://img.youtube.com; "
+    "connect-src 'self' https: http:; "
+    "media-src 'self' https: http: blob:; "
+    "frame-ancestors 'none'"
+)
 
 # Validate port number
 try:
@@ -589,7 +604,7 @@ def _fetch_full_state():
     """
     Return a dict with the full player state for the UI.
     Uses a single socket session to fetch all mpv properties (batch).
-    Lyrics: returns cached value or LYRICS_LOADING — never blocks on fetch.
+    Lyrics: returns cached value or LYRICS_LOADING -- never blocks on fetch.
     """
     if not mpv_alive():
         return {
@@ -597,14 +612,14 @@ def _fetch_full_state():
             "title": "nothing playing", "pos": 0, "dur": 0,
             "volume": 80, "speed": 1.0, "queue": [], "currentIdx": -1,
             "repeat": False, "loopOne": False, "autoDj": False,
-            "lyrics": None,
+            "autoDjSeed": "", "lyrics": None, "bufferPct": 0,
         }
 
     # Fetch all properties in one socket session.
     props = mpv_get_batch([
         "media-title", "time-pos", "duration", "pause",
         "volume", "speed", "loop-playlist", "loop-file", "playlist-playing-pos",
-        "playlist",
+        "playlist", "demuxer-cache-state",
     ])
 
     title        = props.get("media-title") or ""
@@ -616,6 +631,7 @@ def _fetch_full_state():
     loop_playlist = props.get("loop-playlist") or "no"
     loop_file    = props.get("loop-file") or "no"
     playlist_pos = props.get("playlist-playing-pos")
+    cache_state  = props.get("demuxer-cache-state") or {}
 
     pl_data = props.get("playlist") or []
     if not isinstance(pl_data, list):
@@ -652,8 +668,18 @@ def _fetch_full_state():
 
     is_paused = paused is True or paused == "true" or paused == "yes"
     is_playing = bool(title) and title != "nothing playing"
+    buffer_pct = 0
+    if isinstance(cache_state, dict) and dur:
+        ranges = cache_state.get("seekable-ranges") or []
+        if ranges:
+            try:
+                cache_end = float(ranges[-1].get("end", 0))
+                buffer_pct = max(0, min(100, round(cache_end / dur * 100)))
+            except (TypeError, ValueError, ZeroDivisionError):
+                buffer_pct = 0
 
-    autodj = os.path.exists(os.path.expanduser("~/music_system/data/autodj_enabled"))
+    autodj = os.path.exists(os.path.join(MUSIC_ROOT, "data", "autodj_enabled"))
+    autodj_seed = _latest_history_title()
 
     # Never block: use cache or loading sentinel
     lyrics_data = get_lyrics_cached(title) if title else None
@@ -672,8 +698,33 @@ def _fetch_full_state():
         "repeat": loop_playlist not in ("no", "", False),
         "loopOne": loop_file not in ("no", "", False),
         "autoDj": autodj,
+        "autoDjSeed": autodj_seed,
         "lyrics": lyrics_data,
+        "bufferPct": buffer_pct,
     }
+
+
+RATE_LIMIT_REQUESTS = 10
+RATE_LIMIT_WINDOW = 1.0  # seconds
+
+# Per-IP rate limiting: each IP gets its own sliding window.
+_rate_limit_buckets = {}  # {ip_str: deque[float]}
+_rate_limit_lock = threading.Lock()
+
+
+def _check_rate_limit(client_ip="unknown"):
+    """Return True if request is allowed, False if rate limited (per-IP sliding window)."""
+    now = time.monotonic()
+    with _rate_limit_lock:
+        if client_ip not in _rate_limit_buckets:
+            _rate_limit_buckets[client_ip] = deque()
+        bucket = _rate_limit_buckets[client_ip]
+        while bucket and now - bucket[0] >= RATE_LIMIT_WINDOW:
+            bucket.popleft()
+        if len(bucket) >= RATE_LIMIT_REQUESTS:
+            return False
+        bucket.append(now)
+        return True
 
 
 class MpvStateCache:
@@ -702,34 +753,6 @@ _state_cache = MpvStateCache()
 def get_full_state():
     return _state_cache.get()
 
-
-# ── Command whitelist and rate limiting ──────────────────────────────────────
-
-ALLOWED_CMD_ACTIONS = frozenset([
-    "pause", "pp", "next", "mn", "prev", "mb", "stop", "seek", "vol", "volume",
-    "speed", "repeat", "rp", "repeat-one", "ro", "shuffle", "playlist-play-index",
-    "clear", "norm", "like", "autodj", "eq", "play", "add", "mox", "qrm", "qmove",
-])
-
-RATE_LIMIT_REQUESTS = 10
-RATE_LIMIT_WINDOW = 1.0  # seconds
-
-_cmd_timestamps = deque()
-_cmd_timestamps_lock = threading.Lock()
-
-
-def _check_rate_limit():
-    """Return True if request is allowed, False if rate limited."""
-    now = time.monotonic()
-    with _cmd_timestamps_lock:
-        while _cmd_timestamps and now - _cmd_timestamps[0] >= RATE_LIMIT_WINDOW:
-            _cmd_timestamps.popleft()
-        if len(_cmd_timestamps) >= RATE_LIMIT_REQUESTS:
-            return False
-        _cmd_timestamps.append(now)
-    return True
-
-
 BLOCKED_QUERY_PATTERNS = (
     r'[;&|`$]',     # shell metacharacters
     r'\.\./',       # path traversal
@@ -751,12 +774,132 @@ def _validate_query(query):
     return True, None
 
 
+def _parse_search_output(stdout):
+    """Parse mox search table-ish output into title/duration/url rows."""
+    results = []
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
+        if not line or "http" not in line:
+            continue
+        parts = [part.strip() for part in line.split(" | ")]
+        if len(parts) >= 3:
+            title, duration, url = parts[0], parts[1], parts[-1]
+        else:
+            url_match = re.search(r'https?://\S+', line)
+            if not url_match:
+                continue
+            url = url_match.group(0)
+            title = line[:url_match.start()].strip(" -|\t") or url
+            duration = ""
+        if re.match(r'^https?://', url):
+            results.append({"title": title, "duration": duration, "url": url})
+    return results[:20]
+
+
+def search_tracks(query):
+    """Run the CLI search path and return structured rows for the web UI."""
+    valid, err = _validate_query(query)
+    if not valid:
+        return {"ok": False, "msg": err, "results": []}
+
+    try:
+        result = subprocess.run(
+            ["mox", "search", query],
+            capture_output=True,
+            text=True,
+            timeout=30,  # yt-dlp can be slow; 30s gives enough headroom
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "msg": "search timed out (try setting YOUTUBE_API_KEY for instant results)", "results": []}
+    except Exception as e:
+        logger.error(f"Search command failed: {e}")
+        return {"ok": False, "msg": "search failed", "results": []}
+
+    rows = _parse_search_output(result.stdout)
+    if result.returncode != 0 and not rows:
+        return {"ok": False, "msg": "search failed", "results": []}
+    return {"ok": True, "msg": "ok", "results": rows}
+
+
+def _read_history_rows() -> list:
+    """Read the mox TSV history file into normalized dictionaries."""
+    rows = []
+    try:
+        with open(HISTORY_FILE, "r", encoding="utf-8", errors="replace") as f:
+            for raw_line in f:
+                line = raw_line.rstrip("\n")
+                if not line:
+                    continue
+                parts = line.split("\t", 2)
+                if len(parts) != 3:
+                    continue
+                played_at, title, url = parts
+                rows.append({
+                    "playedAt": played_at,
+                    "title": title or "unknown",
+                    "url": url,
+                })
+    except FileNotFoundError:
+        return []
+    except OSError as e:
+        logger.error(f"Failed to read history: {e}")
+        return []
+    return rows
+
+
+def _latest_history_title() -> str:
+    """Return the most recent history title for Auto-DJ seed display."""
+    rows = _read_history_rows()
+    return rows[-1]["title"] if rows else ""
+
+
+def get_history(page: int = 1, limit: int = 50) -> dict:
+    """Return paginated reverse-chronological play history."""
+    try:
+        page = max(1, int(page))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        limit = max(1, min(100, int(limit)))
+    except (TypeError, ValueError):
+        limit = 50
+
+    rows = _read_history_rows()
+    counts = {}
+    for item in rows:
+        key = (item["url"] or item["title"]).lower()
+        counts[key] = counts.get(key, 0) + 1
+
+    ordered = list(reversed(rows))
+    start = (page - 1) * limit
+    page_rows = ordered[start:start + limit]
+    for item in page_rows:
+        key = (item["url"] or item["title"]).lower()
+        item["playCount"] = counts.get(key, 1)
+
+    return {
+        "ok": True,
+        "page": page,
+        "limit": limit,
+        "total": len(rows),
+        "results": page_rows,
+    }
+
+
+ALLOWED_CMD_ACTIONS = frozenset([
+    "pause", "pp", "next", "mn", "prev", "mb", "stop", "seek", "vol", "volume",
+    "speed", "repeat", "rp", "repeat-one", "ro", "shuffle", "playlist-play-index",
+    "clear", "norm", "like", "autodj", "eq", "play", "add", "mox", "qrm", "qmove",
+])
+
+
 def _validate_cmd(cmd_str):
     """Return (valid, error_msg). Valid means cmd action is whitelisted and safe."""
     cmd_str = (cmd_str or "").strip()
     if not cmd_str:
         return False, "empty command"
-    
+
     # Strict command length limit
     if len(cmd_str) > 200:
         return False, "command too long"
@@ -780,6 +923,9 @@ def _validate_cmd(cmd_str):
             # Only allow numeric values with optional +/- prefix
             if not re.match(r'^[+-]?[0-9]+(\.[0-9]+)?$', arg):
                 return False, f"invalid argument for {action}: {arg}"
+    elif action == "qmove":
+        if len(parts) != 3 or not all(re.match(r'^[0-9]+$', arg) for arg in parts[1:]):
+            return False, "qmove needs positive integer positions"
     
     return True, None
 
@@ -865,6 +1011,27 @@ def handle_cmd(cmd_str):
         mpv_command(["playlist-shuffle"])
         return {"ok": True, "msg": "shuffled"}
 
+    elif action == "add":
+        if len(parts) > 1:
+            query = " ".join(parts[1:])
+            valid, err = _validate_query(query)
+            if not valid:
+                return {"ok": False, "msg": err}
+            try:
+                subprocess.run(
+                    ["mox", query, "-a"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=30,
+                    check=False,
+                )
+                return {"ok": True, "msg": "queued"}
+            except subprocess.TimeoutExpired:
+                return {"ok": False, "msg": "queue timed out"}
+            except Exception as e:
+                return {"ok": False, "msg": f"queue failed: {str(e)}"}
+        return {"ok": False, "msg": "add needs query"}
+
     elif action == "playlist-play-index":
         if len(parts) > 1:
             try:
@@ -874,6 +1041,19 @@ def handle_cmd(cmd_str):
             except ValueError:
                 pass
         return {"ok": False, "msg": "need index"}
+
+    elif action == "qmove":
+        if len(parts) > 2:
+            try:
+                from_idx = int(parts[1]) - 1
+                to_idx = int(parts[2]) - 1
+                if from_idx < 0 or to_idx < 0:
+                    return {"ok": False, "msg": "qmove positions must be positive"}
+                mpv_command(["playlist-move", from_idx, to_idx])
+                return {"ok": True, "msg": f"moved track {parts[1]} to {parts[2]}"}
+            except ValueError:
+                pass
+        return {"ok": False, "msg": "qmove needs from/to positions"}
 
     elif action == "clear":
         mpv_command(["playlist-clear"])
@@ -1111,7 +1291,7 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
     def _validate_auth(self):
         if not UXI_AUTH_ENABLED or os.environ.get("MOX_TEST_MODE"):
             return True
-        return secrets.compare_digest(self._read_cookie("mox_auth") or "", CSRF_TOKEN)
+        return secrets.compare_digest(self._read_cookie("mox_auth") or "", AUTH_TOKEN)
 
     def do_GET(self):
         try:
@@ -1126,17 +1306,50 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
 
             if path == "/" or path == "/index.html":
                 self._serve_html()
-            elif path == "/api/state":
+            elif path in ("/api/state", "/api/v2/state"):
                 self._json_response(get_full_state())
             elif path == "/api/auth":
                 self._json_response({"authRequired": UXI_AUTH_ENABLED, "authenticated": self._validate_auth()})
-            elif path == "/api/events":
+            elif path in ("/api/events", "/api/v2/events"):
                 self._serve_sse()
+            elif path == "/api/v2/search":
+                params = urllib.parse.parse_qs(parsed.query)
+                query = (params.get("q") or [""])[0]
+                self._json_response(search_tracks(query))
+            elif path == "/api/v2/history":
+                params = urllib.parse.parse_qs(parsed.query)
+                page = (params.get("page") or ["1"])[0]
+                limit = (params.get("limit") or ["50"])[0]
+                self._json_response(get_history(page, limit))
+            elif path == "/api/v2/health":
+                self._json_response({"ok": True, "mpv": mpv_alive(), "time": int(time.time())})
+            elif path in ("/manifest.json", "/manifest.webmanifest"):
+                self._serve_manifest()
             else:
                 logger.warning(f"404 - Path not found: {path}")
                 self.send_error(404)
         except Exception as e:
             self.handle_exception(e)
+
+    def _serve_manifest(self):
+        """Serve a tiny PWA manifest without adding a static asset pipeline."""
+        body = json.dumps({
+            "name": "mox",
+            "short_name": "mox",
+            "start_url": "/",
+            "display": "standalone",
+            "background_color": "#0a0a0b",
+            "theme_color": "#c8ff5a",
+            "icons": [],
+        }).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/manifest+json")
+        self.send_header("Content-Length", len(body))
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Content-Security-Policy", CSP_HEADER)
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        self.wfile.write(body)
 
     def _serve_sse(self):
         """Serve Server-Sent Events stream using the _SseClient state machine."""
@@ -1198,9 +1411,9 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
                 self._handle_auth_request()
             elif not self._validate_auth():
                 self._json_response({"ok": False, "msg": "PIN required"}, 401)
-            elif path == "/api/cmd":
+            elif path in ("/api/cmd", "/api/v2/cmd"):
                 self._handle_cmd_request()
-            elif path == "/api/play":
+            elif path in ("/api/play", "/api/v2/play"):
                 self._handle_play_request()
             else:
                 logger.warning(f"404 - POST path not found: {path}")
@@ -1218,7 +1431,14 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             return
         pin = str(data.get("pin", ""))
         if UXI_AUTH_ENABLED and secrets.compare_digest(pin, UXI_AUTH_PIN):
-            self._json_response({"ok": True, "msg": "authenticated"}, headers={"Set-Cookie": f"mox_auth={CSRF_TOKEN}; Path=/; SameSite=Strict"})
+            self._json_response(
+                {"ok": True, "msg": "authenticated"},
+                headers={
+                    "Set-Cookie": (
+                        f"mox_auth={AUTH_TOKEN}; Path=/; SameSite=Strict; HttpOnly"
+                    )
+                },
+            )
         elif not UXI_AUTH_ENABLED:
             self._json_response({"ok": True, "msg": "auth disabled"})
         else:
@@ -1227,7 +1447,7 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
     def _handle_cmd_request(self):
         """Handle /api/cmd POST requests."""
         try:
-            if not _check_rate_limit():
+            if not _check_rate_limit(self.address_string()):
                 logger.warning(f"Rate limit exceeded for {self.address_string()}")
                 self._json_response({"ok": False, "msg": "rate limit exceeded"}, 429)
                 return
@@ -1310,11 +1530,17 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             if valid:
                 try:
                     logger.info(f"Play request: {query}")
-                    subprocess.Popen(["mox", query], 
-                                   stdout=subprocess.DEVNULL, 
-                                   stderr=subprocess.DEVNULL)
+                    subprocess.run(
+                        ["mox", query],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=30,
+                        check=False,
+                    )
                     _state_cache.invalidate()
                     self._json_response({"ok": True, "msg": f"playing: {query}"})
+                except subprocess.TimeoutExpired:
+                    self._json_response({"ok": False, "msg": "play timed out"}, 504)
                 except Exception as e:
                     logger.error(f"Play command failed: {e}")
                     self._json_response({"ok": False, "msg": f"play failed: {str(e)}"}, 500)
@@ -1336,6 +1562,7 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-cache")
             self.send_header("Set-Cookie", f"mox_token={CSRF_TOKEN}; Path=/; SameSite=Strict")
             # Security headers
+            self.send_header("Content-Security-Policy", CSP_HEADER)
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("X-Frame-Options", "DENY")
             self.send_header("X-XSS-Protection", "1; mode=block")
@@ -1352,6 +1579,7 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", _allowed_origin())
         self.send_header("Cache-Control", "no-cache")
         # Security headers
+        self.send_header("Content-Security-Policy", CSP_HEADER)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("X-XSS-Protection", "1; mode=block")

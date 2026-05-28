@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>mox — music</title>
+<meta name="theme-color" content="#c8ff5a">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230a0a0b'/%3E%3Ccircle cx='32' cy='32' r='19' fill='%23c8ff5a'/%3E%3Ccircle cx='32' cy='32' r='7' fill='%230a0a0b'/%3E%3C/svg%3E">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Serif+Display:ital@0;1&display=swap');
 
@@ -15,6 +18,11 @@
     --accent: #c8ff5a;
     --accent2: #5affdc;
     --accent3: #ff5a8c;
+    --color-warning: #ffb85a;
+    --color-info: #5a8cff;
+    --glass-bg: rgba(17, 17, 20, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.06);
+    --glass-blur: 20px;
     --text: #e8e8f0;
     --muted: #555566;
     --dim: #333340;
@@ -40,6 +48,7 @@
     color: var(--text);
     font-family: 'Space Mono', monospace;
     min-height: 100vh;
+    padding-bottom: 82px;
     overflow-x: hidden;
     transition: background 0.3s, color 0.3s;
   }
@@ -185,6 +194,26 @@
     animation: spin-loader 0.6s linear infinite;
   }
 
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    min-height: 42px;
+    border-radius: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+  }
+
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+    animation: shimmer 1.2s infinite;
+  }
+
+  @keyframes shimmer { to { transform: translateX(100%); } }
+
   /* ── SIDEBAR ── */
   .sidebar {
     grid-row: 2;
@@ -271,6 +300,7 @@
   }
 
   .vinyl.spinning { animation: spin 3s linear infinite; }
+  .vinyl.spinning { box-shadow: 0 0 44px rgba(200,255,90,0.14), inset 0 0 30px rgba(0,0,0,0.5); }
   .vinyl.paused { animation: none; }
 
   @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -327,6 +357,19 @@
     border-radius: 2px;
     position: relative;
     transition: width 0.5s linear;
+    will-change: width;
+    z-index: 2;
+  }
+
+  .progress-buffer {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0%;
+    height: 100%;
+    background: rgba(255,255,255,0.12);
+    border-radius: 2px;
+    transition: width 0.5s linear;
+    will-change: width;
   }
 
   .progress-fill::after {
@@ -400,6 +443,35 @@
     color: var(--muted);
   }
 
+  .speed-row,
+  .autodj-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+
+  .speed-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  .speed-btn.active,
+  .tab-btn.active {
+    color: var(--accent);
+    border-color: rgba(200,255,90,0.45);
+    background: rgba(200,255,90,0.08);
+  }
+
+  .visualizer {
+    width: 100%;
+    height: 54px;
+    display: block;
+    margin: 8px 0 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
   .vol-slider {
     flex: 1;
     -webkit-appearance: none;
@@ -421,10 +493,9 @@
 
   /* ── QUEUE ── */
   .queue-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    position: relative;
     max-height: 300px;
+    min-height: 180px;
     overflow-y: auto;
   }
 
@@ -458,6 +529,19 @@
     border: 1px solid transparent;
     font-size: 12px;
     position: relative;
+    min-height: 52px;
+  }
+
+  .queue-virtual-spacer { width: 1px; opacity: 0; pointer-events: none; }
+  .queue-virtual-window {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    will-change: transform;
   }
 
   .queue-item:hover { background: var(--surface2); border-color: var(--border); }
@@ -587,6 +671,16 @@
     from { height: 4px; }
     to { height: 14px; }
   }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .tab-panel.active.lyrics-panel { display: flex; }
 
   /* ── LYRICS PANEL ── */
   .lyrics-panel {
@@ -834,42 +928,201 @@
   }
 
   /* ── MODAL / TOAST ── */
-  .toast {
+  .toast-stack {
     position: fixed;
-    bottom: 24px; left: 50%;
-    transform: translateX(-50%) translateY(80px);
-    background: var(--surface2);
+    right: 24px;
+    bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 220;
+    pointer-events: none;
+  }
+
+  .toast {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
     border: 1px solid var(--accent);
     color: var(--accent);
     font-size: 12px;
     padding: 10px 20px;
     border-radius: 6px;
     letter-spacing: 1px;
-    transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
-    z-index: 200;
-    pointer-events: none;
-    max-width: 90%;
-    text-align: center;
+    box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+    max-width: min(360px, calc(100vw - 32px));
+    transform: translateY(12px);
+    opacity: 0;
+    animation: toastIn 0.22s ease-out forwards;
   }
 
-  .toast.show { transform: translateX(-50%) translateY(0); }
-  
-  .toast.error {
-    border-color: var(--accent3);
-    color: var(--accent3);
+  @keyframes toastIn { to { transform: translateY(0); opacity: 1; } }
+
+  .toast.error { border-color: var(--accent3); color: var(--accent3); }
+  .toast.success { border-color: var(--accent); color: var(--accent); }
+  .toast.info { border-color: var(--accent2); color: var(--accent2); }
+  .toast.warning { border-color: var(--color-warning); color: var(--color-warning); }
+
+  .command-palette {
+    position: fixed;
+    inset: 0;
+    z-index: 520;
+    display: none;
+    place-items: start center;
+    padding: 10vh 18px 18px;
+    background: rgba(0,0,0,0.55);
   }
-  
-  .toast.success {
-    border-color: var(--accent);
-    color: var(--accent);
+  .command-palette.show { display: grid; }
+  .palette-box {
+    width: min(720px, 100%);
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    backdrop-filter: blur(var(--glass-blur));
+    box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+    overflow: hidden;
   }
-  
-  .toast.info {
-    border-color: var(--accent2);
-    color: var(--accent2);
+  .palette-input {
+    width: 100%;
+    padding: 16px 18px;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 15px;
+    outline: none;
+  }
+  .palette-results { max-height: min(420px, 60vh); overflow-y: auto; padding: 8px; }
+  .palette-item, .search-result {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+  }
+  .palette-item:hover, .palette-item.active, .search-result:hover {
+    background: var(--surface2);
+    border-color: var(--border);
+  }
+  .palette-item small, .search-result small { color: var(--muted); }
+  .history-list { display: flex; flex-direction: column; gap: 8px; }
+  .history-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface2);
+  }
+  .history-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+  .history-meta {
+    color: var(--muted);
+    font-size: 10px;
+    margin-top: 3px;
+  }
+  .history-actions { display: flex; align-items: center; gap: 8px; }
+  .search-box { display: flex; gap: 8px; margin-bottom: 12px; }
+  .search-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    padding: 10px;
+    outline: none;
+  }
+
+  .bottom-player {
+    position: fixed;
+    left: 50%;
+    bottom: 0;
+    transform: translateX(-50%);
+    width: min(1200px, 100%);
+    min-height: 72px;
+    z-index: 180;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(120px, 220px);
+    align-items: center;
+    gap: 16px;
+    padding: 10px 20px;
+    background: var(--glass-bg);
+    border-top: 1px solid var(--glass-border);
+    backdrop-filter: blur(var(--glass-blur));
+    box-shadow: 0 -18px 40px rgba(0,0,0,0.28);
+  }
+
+  .bottom-track {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .bottom-art {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    background: radial-gradient(circle, var(--accent) 0 34%, var(--surface2) 36% 100%);
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .bottom-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+  }
+
+  .bottom-meta { color: var(--muted); font-size: 10px; }
+  .bottom-controls { display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .bottom-progress { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    body.sidebar-open { overflow: hidden; }
+    .layout {
+      grid-template-columns: 1fr;
+      padding: 16px;
+    }
+    .sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 72px;
+      width: min(340px, calc(100vw - 42px));
+      z-index: 260;
+      padding: 16px;
+      background: var(--bg);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+      transform: translateX(-105%);
+      transition: transform 0.2s ease;
+    }
+    body.sidebar-open .sidebar { transform: translateX(0); }
+    .main, .cmd-bar, .header { grid-column: 1; }
+  }
+
   @media (max-width: 768px) {
     .layout {
       grid-template-columns: 1fr;
@@ -885,6 +1138,11 @@
     .shortcut-grid { grid-template-columns: 1fr; }
     .track-art { margin-bottom: 16px; }
     .vinyl { width: 100px; height: 100px; }
+    .bottom-player {
+      grid-template-columns: minmax(0, 1fr) auto;
+      padding: 8px 12px;
+    }
+    .bottom-progress { display: none; }
   }
 
   @media (max-width: 480px) {
@@ -904,6 +1162,13 @@
     .stat-val { font-size: 14px; }
     .stat-lbl { font-size: 8px; letter-spacing: 0.5px; }
     .header-right { width: 100%; justify-content: space-between; }
+    .tab-btn,
+    .eq-btn,
+    .ctrl-btn {
+      min-height: 44px;
+    }
+    .search-box { flex-direction: column; }
+    .history-item { grid-template-columns: 1fr; }
   }
 
   /* Scrolling track title */
@@ -944,6 +1209,7 @@
   <header class="header">
     <div class="logo">mox<span>terminal music CLI v7.2.2 · <kbd style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:11px;color:var(--accent)">mox uxi</kbd> to open</span></div>
     <div class="header-right">
+      <button class="theme-toggle" onclick="toggleSidebar()" title="Toggle player drawer" aria-label="Toggle player drawer">panel</button>
       <span class="tag tag-green" id="autodj-badge" style="display:none" role="status" aria-label="Auto-DJ enabled">🤖 auto-dj</span>
       <span class="tag tag-pink" id="repeat-badge" style="display:none" role="status" aria-label="Repeat enabled">🔁 repeat</span>
       <span class="tag tag-cyan" id="loop-one-badge" style="display:none" role="status" aria-label="Loop one enabled">🔂 loop one</span>
@@ -974,6 +1240,7 @@
       <!-- Progress -->
       <div class="progress-wrap" id="progress-wrap" onclick="seekClick(event)">
         <div class="progress-track">
+          <div class="progress-buffer" id="progress-buffer" style="width:0%"></div>
           <div class="progress-fill" id="progress-fill" style="width:0%"></div>
         </div>
         <div class="progress-times">
@@ -981,6 +1248,8 @@
           <span id="time-dur">0:00</span>
         </div>
       </div>
+
+      <canvas class="visualizer" id="visualizer" width="320" height="54" aria-label="Frequency visualizer"></canvas>
 
       <!-- Controls -->
       <div class="controls">
@@ -1000,6 +1269,18 @@
                oninput="setVolume(this.value)">
         <span id="vol-val">80%</span>
         <span>🔊</span>
+      </div>
+
+      <div class="speed-row">
+        <span class="card-label" style="margin-bottom:0">speed</span>
+        <div class="speed-presets">
+          <button class="eq-btn speed-btn" data-speed="0.5" onclick="setSpeed(0.5)">0.5x</button>
+          <button class="eq-btn speed-btn" data-speed="0.75" onclick="setSpeed(0.75)">0.75x</button>
+          <button class="eq-btn speed-btn" data-speed="1" onclick="setSpeed(1)">1x</button>
+          <button class="eq-btn speed-btn" data-speed="1.25" onclick="setSpeed(1.25)">1.25x</button>
+          <button class="eq-btn speed-btn" data-speed="1.5" onclick="setSpeed(1.5)">1.5x</button>
+          <button class="eq-btn speed-btn" data-speed="2" onclick="setSpeed(2)">2x</button>
+        </div>
       </div>
     </div>
 
@@ -1025,12 +1306,29 @@
         </div>
       </div>
     </div>
+
+    <div class="card">
+      <div class="autodj-row" style="margin-top:0">
+        <div>
+          <div class="card-label" style="margin-bottom:4px">auto-dj</div>
+          <div class="history-meta" id="autodj-status">off</div>
+        </div>
+        <button class="eq-btn" id="autodj-toggle" onclick="toggleAutoDj()">toggle</button>
+      </div>
+    </div>
   </aside>
 
   <!-- MAIN CONTENT -->
   <main class="main">
+    <div class="tabs" role="tablist" aria-label="Main panels">
+      <button class="eq-btn tab-btn active" data-tab="queue" onclick="showTab('queue')">queue</button>
+      <button class="eq-btn tab-btn" data-tab="lyrics" onclick="showTab('lyrics')">lyrics</button>
+      <button class="eq-btn tab-btn" data-tab="search" onclick="showTab('search')">search</button>
+      <button class="eq-btn tab-btn" data-tab="history" onclick="showTab('history')">history</button>
+    </div>
+
     <!-- Queue -->
-    <div class="card" style="flex:1;">
+    <div class="card tab-panel active" id="panel-queue" style="flex:1;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
         <div class="card-label" style="margin-bottom:0">queue</div>
         <div style="display:flex;gap:8px;">
@@ -1047,11 +1345,33 @@
     </div>
 
     <!-- Lyrics -->
-    <div class="card lyrics-panel" id="lyrics-panel" style="min-height:200px;">
+    <div class="card tab-panel" id="panel-search">
+      <div class="card-label">search</div>
+      <div class="search-box">
+        <input class="search-input" id="search-input" placeholder="Search YouTube from mox"
+               onkeydown="if(event.key==='Enter') runSearch()">
+        <button class="eq-btn" onclick="runSearch()">search</button>
+      </div>
+      <div id="search-results">
+        <div style="color:var(--muted);font-size:12px;">type a song, artist, or URL</div>
+      </div>
+    </div>
+
+    <div class="card lyrics-panel tab-panel" id="panel-lyrics" style="min-height:200px;">
       <div class="card-label">lyrics <span class="tag tag-cyan" style="margin-left:8px;">lrclib.net</span></div>
       <div class="lyrics-content" id="lyrics-content">
         <div class="lyric-line active">♪ no lyrics loaded</div>
         <div class="lyric-line">run: mox lyrics</div>
+      </div>
+    </div>
+
+    <div class="card tab-panel" id="panel-history">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
+        <div class="card-label" style="margin-bottom:0">history</div>
+        <button class="eq-btn" onclick="loadHistory()">refresh</button>
+      </div>
+      <div class="history-list" id="history-list">
+        <div style="color:var(--muted);font-size:12px;">loading history...</div>
       </div>
     </div>
 
@@ -1088,6 +1408,28 @@
 
 </div>
 
+<div class="bottom-player" id="bottom-player">
+  <div class="bottom-track">
+    <div class="bottom-art" aria-hidden="true"></div>
+    <div style="min-width:0">
+      <div class="bottom-title" id="bottom-title">nothing playing</div>
+      <div class="bottom-meta" id="bottom-meta">idle</div>
+    </div>
+  </div>
+  <div class="bottom-controls">
+    <button class="ctrl-btn" onclick="cmd('prev')" title="Previous">⏮</button>
+    <button class="ctrl-btn primary" id="bottom-play-btn" onclick="cmd('pause')" title="Play/Pause">▶</button>
+    <button class="ctrl-btn" onclick="cmd('next')" title="Next">⏭</button>
+  </div>
+  <div class="bottom-progress">
+    <div class="progress-track">
+      <div class="progress-buffer" id="bottom-progress-buffer" style="width:0%"></div>
+      <div class="progress-fill" id="bottom-progress-fill" style="width:0%"></div>
+    </div>
+    <div class="bottom-meta"><span id="bottom-time-pos">0:00</span> / <span id="bottom-time-dur">0:00</span></div>
+  </div>
+</div>
+
 <!-- Shortcut Legend Overlay -->
 <div class="shortcut-overlay" id="shortcut-overlay" onclick="toggleShortcutOverlay(event)">
   <div class="shortcut-modal" onclick="event.stopPropagation()">
@@ -1107,6 +1449,7 @@
       <div class="shortcut-item"><span class="shortcut-key">↓</span><span class="shortcut-desc">Volume down</span></div>
       <div class="shortcut-item"><span class="shortcut-key">s</span><span class="shortcut-desc">Shuffle</span></div>
       <div class="shortcut-item"><span class="shortcut-key">r</span><span class="shortcut-desc">Repeat toggle</span></div>
+      <div class="shortcut-item"><span class="shortcut-key">Ctrl/⌘ K</span><span class="shortcut-desc">Command palette</span></div>
       <div class="shortcut-item"><span class="shortcut-key">/</span><span class="shortcut-desc">Focus command bar</span></div>
       <div class="shortcut-item"><span class="shortcut-key">?</span><span class="shortcut-desc">Show / hide shortcuts</span></div>
     </div>
@@ -1114,7 +1457,15 @@
 </div>
 
 <!-- Toast -->
-<div class="toast" id="toast"></div>
+<div class="toast-stack" id="toast-stack"></div>
+
+<div class="command-palette" id="command-palette" onclick="closeCommandPalette(event)">
+  <div class="palette-box" onclick="event.stopPropagation()">
+    <input class="palette-input" id="palette-input" placeholder="Search commands, queue, or type music to play"
+           oninput="renderCommandPalette()" onkeydown="handlePaletteKey(event)">
+    <div class="palette-results" id="palette-results"></div>
+  </div>
+</div>
 
 <div class="auth-overlay" id="auth-overlay">
   <div class="auth-box">
@@ -1144,7 +1495,16 @@ const state = {
   repeat: false,
   loopOne: false,
   autoDj: false,
+  autoDjSeed: '',
+  bufferPct: 0,
   _prevTitle: '',
+};
+
+const uiStore = {
+  searchResults: [],
+  paletteResults: [],
+  historyResults: [],
+  historyLoaded: false,
 };
 
 const API = (() => {
@@ -1204,7 +1564,7 @@ async function apiCmd(cmdStr) {
       method: 'POST',
       headers: apiHeaders(),
       body: JSON.stringify({cmd: cmdStr}),
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(5000),
     });
     if (!r.ok) {
       const data = await r.json().catch(() => ({msg: 'Command failed'}));
@@ -1228,7 +1588,7 @@ async function apiPlay(query) {
       method: 'POST',
       headers: apiHeaders(),
       body: JSON.stringify({query}),
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(35000),
     });
     if (!r.ok) {
       const data = await r.json().catch(() => ({msg: 'Play failed'}));
@@ -1242,6 +1602,40 @@ async function apiPlay(query) {
     return false;
   } finally {
     setCommandPending(false);
+  }
+}
+
+async function apiSearch(query) {
+  try {
+    const url = API + '/api/v2/search?q=' + encodeURIComponent(query);
+    const r = await fetch(url, {signal: AbortSignal.timeout(35000)});
+    const data = await r.json().catch(() => ({ok: false, results: [], msg: 'Search failed'}));
+    if (!r.ok || !data.ok) {
+      showToast(data.msg || 'Search failed', 'error');
+      return [];
+    }
+    return data.results || [];
+  } catch (err) {
+    console.error('API search error:', err);
+    showToast('Search connection error', 'error');
+    return [];
+  }
+}
+
+async function apiHistory(page = 1, limit = 50) {
+  try {
+    const url = API + `/api/v2/history?page=${page}&limit=${limit}`;
+    const r = await fetch(url, {signal: AbortSignal.timeout(5000)});
+    const data = await r.json().catch(() => ({ok: false, results: [], msg: 'History failed'}));
+    if (!r.ok || !data.ok) {
+      showToast(data.msg || 'History failed', 'error');
+      return [];
+    }
+    return data.results || [];
+  } catch (err) {
+    console.error('API history error:', err);
+    showToast('History connection error', 'error');
+    return [];
   }
 }
 
@@ -1273,6 +1667,7 @@ async function submitPin() {
 let sse = null;
 let pollInterval = null;
 let lastQueueJSON = '';
+let queueRowsCache = [];
 const POLL_INTERVAL = 500;
 const SSE_RECONNECT_DELAY = 3000;
 let reconnectAttempts = 0;
@@ -1374,7 +1769,7 @@ setTimeout(() => {
 // ── UI Update ──────────────────────────────────────────────────────────────
 
 function updateNowPlaying() {
-  const {title, pos, dur, paused, volume, speed, queue, currentIdx, alive, connecting} = state;
+  const {title, pos, dur, paused, volume, speed, queue, currentIdx, alive, connecting, bufferPct} = state;
 
   document.getElementById('track-title').textContent = escapeHtml(title || 'nothing playing');
   
@@ -1398,9 +1793,17 @@ function updateNowPlaying() {
 
   const pct = dur > 0 ? (pos / dur * 100) : 0;
   document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-buffer').style.width = (bufferPct || 0) + '%';
   document.getElementById('time-pos').textContent = fmtTime(pos);
   document.getElementById('time-dur').textContent = fmtTime(dur);
   document.getElementById('play-btn').textContent = paused ? '▶' : '⏸';
+  document.getElementById('bottom-title').textContent = title || 'nothing playing';
+  document.getElementById('bottom-meta').textContent = alive ? (paused ? 'paused' : 'playing') : 'offline';
+  document.getElementById('bottom-play-btn').textContent = paused ? '▶' : '⏸';
+  document.getElementById('bottom-progress-fill').style.width = pct + '%';
+  document.getElementById('bottom-progress-buffer').style.width = (bufferPct || 0) + '%';
+  document.getElementById('bottom-time-pos').textContent = fmtTime(pos);
+  document.getElementById('bottom-time-dur').textContent = fmtTime(dur);
 
   const vinyl = document.getElementById('vinyl');
   if (!paused && title && title !== 'nothing playing') {
@@ -1416,6 +1819,7 @@ function updateNowPlaying() {
 
   document.getElementById('stat-queue').textContent = queue.length;
   document.getElementById('stat-speed').textContent = speed.toFixed(1) + 'x';
+  updateSpeedButtons(speed);
   document.getElementById('stat-pos').textContent = fmtTime(pos);
   document.getElementById('stat-pct').textContent = dur > 0 ? Math.round(pct) + '%' : '—';
 
@@ -1441,49 +1845,79 @@ function updateNowPlaying() {
   document.getElementById('repeat-badge').style.display = state.repeat ? '' : 'none';
   document.getElementById('autodj-badge').style.display = state.autoDj ? '' : 'none';
   document.getElementById('loop-one-badge').style.display = state.loopOne ? '' : 'none';
+  const autodjStatus = document.getElementById('autodj-status');
+  if (autodjStatus) {
+    autodjStatus.textContent = state.autoDj
+      ? 'ON - seeded from ' + (state.autoDjSeed || state.title || 'recent history')
+      : 'off';
+  }
+  document.getElementById('autodj-toggle')?.classList.toggle('active', !!state.autoDj);
+  updateVisualizerSource();
 }
 
 function updateQueue() {
-  const {queue, currentIdx, paused} = state;
+  const {queue} = state;
   const el = document.getElementById('queue-list');
   const filterEl = document.getElementById('queue-filter');
   const filter = (filterEl?.value || '').trim().toLowerCase();
   if (!queue.length) {
-    el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:20px 0;text-align:center;">queue empty — type a song below to play</div>';
+    queueRowsCache = [];
+    el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:20px 0;text-align:center;"><div style="font-size:22px;margin-bottom:8px;">♪</div><div>No tracks in queue.</div><button class="eq-btn" style="margin-top:10px" onclick="document.getElementById(\'search-input\').focus()">search</button></div>';
     return;
   }
-  const rows = queue
+  queueRowsCache = queue
     .map((item, i) => ({item, i}))
     .filter(({item}) => !filter || (item.title || '').toLowerCase().includes(filter));
 
-  if (!rows.length) {
+  if (!queueRowsCache.length) {
     el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:20px 0;text-align:center;">no queue matches</div>';
     return;
   }
+  renderQueueWindow();
+}
 
-  el.innerHTML = rows.map(({item, i}) => {
-    const title = escapeHtml(item.title || 'Unknown');
-    const thumb = youtubeThumb(item.url || item.title || '');
-    const active = i === currentIdx;
-    const bars = active ? `
-      <div class="playing-bars">
-        <div class="bar-line" style="${paused ? 'height:4px;animation:none;' : ''}"></div>
-        <div class="bar-line" style="${paused ? 'height:8px;animation:none;' : ''}"></div>
-        <div class="bar-line" style="${paused ? 'height:6px;animation:none;' : ''}"></div>
-      </div>
-    ` : `<span class="queue-num">${i + 1}</span>`;
-    return `
-    <div class="queue-item ${active ? 'active' : ''}" onclick="playQueueItem(${i})" data-queue-idx="${i}" draggable="true"
-         ondragstart="queueDragStart(event, ${i})" ondragover="queueDragOver(event)" ondragleave="queueDragLeave(event)" ondrop="queueDrop(event, ${i})" ondragend="queueDragEnd(event)">
-      ${bars}
-      <img class="queue-thumb ${thumb ? '' : 'empty'}" src="${thumb}" alt="">
-      <span class="queue-item-title">${title}</span>
-      <button class="queue-item-remove" onclick="event.stopPropagation();removeQueueItem(${i})" title="Remove from queue" aria-label="Remove ${title}">✕</button>
-    </div>`;
-  }).join('');
+function renderQueueWindow() {
+  const el = document.getElementById('queue-list');
+  if (!queueRowsCache.length) return;
+  const itemH = 56;
+  const buffer = 5;
+  const viewport = el.clientHeight || 300;
+  const start = Math.max(0, Math.floor(el.scrollTop / itemH) - buffer);
+  const visible = Math.ceil(viewport / itemH) + buffer * 2;
+  const rows = queueRowsCache.slice(start, start + visible);
+  const offset = start * itemH;
+  const total = queueRowsCache.length * itemH;
+  el.innerHTML = `
+    <div class="queue-virtual-spacer" style="height:${total}px"></div>
+    <div class="queue-virtual-window" style="transform:translateY(${offset}px)">
+      ${rows.map(renderQueueItem).join('')}
+    </div>
+  `;
+  if (!el.dataset.virtualBound) {
+    el.addEventListener('scroll', () => requestAnimationFrame(renderQueueWindow));
+    el.dataset.virtualBound = '1';
+  }
+}
 
-  const active = el.querySelector('.active');
-  if (active) active.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+function renderQueueItem({item, i}) {
+  const title = escapeHtml(item.title || 'Unknown');
+  const thumb = youtubeThumb(item.url || item.title || '');
+  const active = i === state.currentIdx;
+  const bars = active ? `
+    <div class="playing-bars">
+      <div class="bar-line" style="${state.paused ? 'height:4px;animation:none;' : ''}"></div>
+      <div class="bar-line" style="${state.paused ? 'height:8px;animation:none;' : ''}"></div>
+      <div class="bar-line" style="${state.paused ? 'height:6px;animation:none;' : ''}"></div>
+    </div>
+  ` : `<span class="queue-num">${i + 1}</span>`;
+  return `
+  <div class="queue-item ${active ? 'active' : ''}" onclick="playQueueItem(${i})" data-queue-idx="${i}" draggable="true"
+       ondragstart="queueDragStart(event, ${i})" ondragover="queueDragOver(event)" ondragleave="queueDragLeave(event)" ondrop="queueDrop(event, ${i})" ondragend="queueDragEnd(event)">
+    ${bars}
+    <img class="queue-thumb ${thumb ? '' : 'empty'}" src="${thumb}" alt="">
+    <span class="queue-item-title">${title}</span>
+    <button class="queue-item-remove" onclick="event.stopPropagation();removeQueueItem(${i})" title="Remove from queue" aria-label="Remove ${title}">x</button>
+  </div>`;
 }
 
 function youtubeThumb(value) {
@@ -1563,6 +1997,32 @@ async function setVolume(val) {
       showToast('🔊 volume: ' + v + '%');
     }
   }, 150);
+}
+
+function updateSpeedButtons(speed) {
+  document.querySelectorAll('.speed-btn').forEach(btn => {
+    const value = Number(btn.dataset.speed);
+    btn.classList.toggle('active', Math.abs(value - Number(speed || 1)) < 0.01);
+  });
+}
+
+async function setSpeed(value) {
+  const speed = Math.max(0.25, Math.min(4, Number(value)));
+  updateSpeedButtons(speed);
+  const success = await apiCmd('speed ' + speed);
+  if (success) {
+    state.speed = speed;
+    showToast('speed: ' + speed + 'x');
+    updateNowPlaying();
+  }
+}
+
+async function toggleAutoDj() {
+  const success = await apiCmd('autodj');
+  if (success) {
+    showToast('auto-dj toggled');
+    await poll();
+  }
 }
 
 async function setEq(preset) {
@@ -1646,6 +2106,9 @@ async function queueDrop(event, toIdx) {
   if (!success) {
     state.queue = previousQueue;
     updateQueue();
+  } else {
+    showToast(`moved track ${fromIdx + 1} to ${toIdx + 1}`);
+    await poll();
   }
 }
 
@@ -1694,6 +2157,10 @@ function toggleTheme() {
 
 // ── Shortcut overlay ────────────────────────────────────────────────────────
 
+function toggleSidebar(force) {
+  document.body.classList.toggle('sidebar-open', force ?? !document.body.classList.contains('sidebar-open'));
+}
+
 function toggleShortcutOverlay(e) {
   if (e && e.target !== e.currentTarget) return;
   const el = document.getElementById('shortcut-overlay');
@@ -1703,9 +2170,7 @@ function toggleShortcutOverlay(e) {
 // ── Lyrics panel toggle ──────────────────────────────────────────────────────
 
 function toggleLyricsPanel() {
-  const el = document.getElementById('lyrics-panel');
-  el.classList.toggle('hidden');
-  localStorage.setItem('m-ui-lyrics-visible', !el.classList.contains('hidden'));
+  showTab('lyrics');
 }
 
 // ── Command history ────────────────────────────────────────────────────────
@@ -1819,6 +2284,165 @@ async function handleCmd(e) {
   }
 }
 
+async function runSearch() {
+  const input = document.getElementById('search-input');
+  const box = document.getElementById('search-results');
+  const query = input.value.trim();
+  if (!query) return;
+  box.innerHTML = '<div class="skeleton"></div><div class="skeleton" style="margin-top:8px"></div><div class="skeleton" style="margin-top:8px"></div>';
+  const results = await apiSearch(query);
+  if (!results.length) {
+    box.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px;">No results found.</div>';
+    return;
+  }
+  box.innerHTML = results.map((item, idx) => `
+    <div class="search-result">
+      <div>
+        <div>${escapeHtml(item.title || item.url || 'Unknown')}</div>
+        <small>${escapeHtml(item.duration || '')}</small>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="eq-btn" onclick="playSearchResult(${idx})">play</button>
+        <button class="eq-btn" onclick="queueSearchResult(${idx})">queue</button>
+      </div>
+    </div>
+  `).join('');
+  uiStore.searchResults = results;
+}
+
+async function playSearchResult(idx) {
+  const item = uiStore.searchResults[idx];
+  if (!item) return;
+  await apiPlay(item.url || item.title);
+}
+
+async function queueSearchResult(idx) {
+  const item = uiStore.searchResults[idx];
+  if (!item) return;
+  const success = await apiCmd('add ' + (item.url || item.title));
+  if (success) showToast('queued: ' + (item.title || item.url));
+}
+
+function showTab(name) {
+  document.getElementById('panel-lyrics')?.classList.remove('hidden');
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === name);
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel => {
+    panel.classList.toggle('active', panel.id === 'panel-' + name);
+  });
+  if (name === 'history' && !uiStore.historyLoaded) loadHistory();
+}
+
+async function loadHistory() {
+  const list = document.getElementById('history-list');
+  uiStore.historyLoaded = true;
+  list.innerHTML = '<div class="skeleton"></div><div class="skeleton" style="margin-top:8px"></div>';
+  const rows = await apiHistory(1, 50);
+  if (!rows.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;">No history yet.</div>';
+    return;
+  }
+  list.innerHTML = rows.map((item, idx) => `
+    <div class="history-item">
+      <div>
+        <div class="history-title">${escapeHtml(item.title || item.url || 'Unknown')}</div>
+        <div class="history-meta">${escapeHtml(item.playedAt || '')} - played ${item.playCount || 1}x</div>
+      </div>
+      <div class="history-actions">
+        <button class="eq-btn" onclick="playHistoryItem(${idx})">play</button>
+      </div>
+    </div>
+  `).join('');
+  uiStore.historyResults = rows;
+}
+
+async function playHistoryItem(idx) {
+  const item = (uiStore.historyResults || [])[idx];
+  if (!item) return;
+  await apiPlay(item.url || item.title);
+}
+
+let paletteIndex = 0;
+function openCommandPalette() {
+  const palette = document.getElementById('command-palette');
+  palette.classList.add('show');
+  const input = document.getElementById('palette-input');
+  input.value = '';
+  paletteIndex = 0;
+  renderCommandPalette();
+  setTimeout(() => document.getElementById('palette-input').focus(), 0);
+}
+
+function closeCommandPalette(event) {
+  if (event && event.target !== event.currentTarget) return;
+  document.getElementById('command-palette').classList.remove('show');
+}
+
+function paletteItems() {
+  const commands = Array.from(knownCmds).sort().map(name => ({
+    type: 'command',
+    title: name,
+    desc: COMMAND_HINTS[name] || 'Run mox ' + name,
+    action: () => cmd(name),
+  }));
+  const tracks = state.queue.slice(0, 80).map((item, i) => ({
+    type: 'queue',
+    title: item.title || 'Unknown',
+    desc: 'queue #' + (i + 1),
+    action: () => playQueueItem(i),
+  }));
+  return commands.concat(tracks);
+}
+
+function renderCommandPalette() {
+  const q = document.getElementById('palette-input').value.trim().toLowerCase();
+  const results = paletteItems()
+    .filter(item => !q || (item.title + ' ' + item.desc).toLowerCase().includes(q))
+    .slice(0, 12);
+  const box = document.getElementById('palette-results');
+  if (!results.length) {
+    box.innerHTML = q
+      ? `<div class="palette-item active"><span>Play "${escapeHtml(q)}"</span><small>search</small></div>`
+      : '<div class="palette-item"><span>Start typing</span><small>commands and queue</small></div>';
+    uiStore.paletteResults = [];
+    return;
+  }
+  paletteIndex = Math.min(paletteIndex, results.length - 1);
+  uiStore.paletteResults = results;
+  box.innerHTML = results.map((item, i) => `
+    <div class="palette-item ${i === paletteIndex ? 'active' : ''}" onmousedown="runPaletteItem(${i})">
+      <span>${escapeHtml(item.title)}</span><small>${escapeHtml(item.type)} - ${escapeHtml(item.desc)}</small>
+    </div>
+  `).join('');
+}
+
+function runPaletteItem(idx) {
+  const item = uiStore.paletteResults[idx];
+  const q = document.getElementById('palette-input').value.trim();
+  document.getElementById('command-palette').classList.remove('show');
+  if (item) item.action();
+  else if (q) apiPlay(q);
+}
+
+function handlePaletteKey(e) {
+  const count = uiStore.paletteResults.length;
+  if (e.key === 'ArrowDown') {
+    paletteIndex = count ? (paletteIndex + 1) % count : 0;
+    renderCommandPalette();
+    e.preventDefault();
+  } else if (e.key === 'ArrowUp') {
+    paletteIndex = count ? (paletteIndex - 1 + count) % count : 0;
+    renderCommandPalette();
+    e.preventDefault();
+  } else if (e.key === 'Enter') {
+    runPaletteItem(paletteIndex);
+    e.preventDefault();
+  } else if (e.key === 'Escape') {
+    document.getElementById('command-palette').classList.remove('show');
+  }
+}
+
 let lyricsRefreshTimer = null;
 let lyricsRefreshAttempts = 0;
 
@@ -1842,23 +2466,112 @@ function scheduleLyricsRefresh() {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+const visualizer = {
+  audio: null,
+  ctx: null,
+  analyser: null,
+  data: null,
+  sourceUrl: '',
+  raf: 0,
+  lastFrame: 0,
+};
+
+function currentStreamUrl() {
+  const current = state.queue[state.currentIdx] || {};
+  const url = current.url || '';
+  return /^https?:\/\//.test(url) ? url : '';
+}
+
+function updateVisualizerSource() {
+  const url = currentStreamUrl();
+  if (!url || url === visualizer.sourceUrl) {
+    if (!visualizer.raf) drawVisualizer();
+    return;
+  }
+  visualizer.sourceUrl = url;
+  try {
+    if (!visualizer.audio) {
+      visualizer.audio = new Audio();
+      visualizer.audio.crossOrigin = 'anonymous';
+      visualizer.audio.muted = true;
+      visualizer.audio.volume = 0;
+    }
+    visualizer.audio.src = url;
+    visualizer.audio.play().catch(() => {});
+    if (!visualizer.ctx && window.AudioContext) {
+      visualizer.ctx = new AudioContext();
+      visualizer.analyser = visualizer.ctx.createAnalyser();
+      visualizer.analyser.fftSize = 64;
+      const source = visualizer.ctx.createMediaElementSource(visualizer.audio);
+      source.connect(visualizer.analyser);
+      visualizer.analyser.connect(visualizer.ctx.destination);
+      visualizer.data = new Uint8Array(visualizer.analyser.frequencyBinCount);
+    }
+  } catch (err) {
+    visualizer.analyser = null;
+  }
+  if (!visualizer.raf) drawVisualizer();
+}
+
+function drawVisualizer(ts = 0) {
+  const canvas = document.getElementById('visualizer');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  if (ts - visualizer.lastFrame < 33) {
+    visualizer.raf = requestAnimationFrame(drawVisualizer);
+    return;
+  }
+  visualizer.lastFrame = ts;
+  ctx.clearRect(0, 0, w, h);
+  const bars = 16;
+  const gap = 4;
+  const barW = (w - gap * (bars + 1)) / bars;
+  if (visualizer.analyser && visualizer.data) {
+    visualizer.analyser.getByteFrequencyData(visualizer.data);
+  }
+  const hasAudioData = visualizer.data && visualizer.data.some(value => value > 0);
+  for (let i = 0; i < bars; i++) {
+    const value = hasAudioData
+      ? visualizer.data[Math.min(visualizer.data.length - 1, i * 2)] / 255
+      : (state.paused ? 0.08 : 0.18 + Math.abs(Math.sin((Date.now() / 220) + i)) * 0.72);
+    const barH = Math.max(4, value * (h - 12));
+    const x = gap + i * (barW + gap);
+    const y = h - barH - 6;
+    ctx.fillStyle = i % 3 === 0 ? '#c8ff5a' : (i % 3 === 1 ? '#5affdc' : '#ff5a8c');
+    ctx.fillRect(x, y, barW, barH);
+  }
+  visualizer.raf = requestAnimationFrame(drawVisualizer);
+}
+
 function fmtTime(s) {
   s = Math.floor(s || 0);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-let toastTimer;
 function showToast(msg, type = 'success') {
-  const el = document.getElementById('toast');
+  const stack = document.getElementById('toast-stack');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
   el.textContent = msg;
-  el.className = 'toast show ' + type;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+  stack.appendChild(el);
+  while (stack.children.length > 5) stack.firstElementChild.remove();
+  setTimeout(() => {
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(8px)';
+    setTimeout(() => el.remove(), 180);
+  }, 3000);
 }
 
 // ── Keyboard shortcuts ─────────────────────────────────────────────────────
 document.addEventListener('keydown', (e) => {
   const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    openCommandPalette();
+    return;
+  }
   if (isInput && e.key !== 'Escape' && e.key !== '?') return;
 
   switch (e.key) {
@@ -1881,6 +2594,8 @@ document.addEventListener('keydown', (e) => {
     case 'Escape':
       document.getElementById('cmd-input').blur();
       document.getElementById('shortcut-overlay').classList.remove('show');
+      document.getElementById('command-palette').classList.remove('show');
+      toggleSidebar(false);
       break;
   }
 });
@@ -1893,10 +2608,11 @@ checkAuth();
 
 const lyricsVisible = localStorage.getItem('m-ui-lyrics-visible');
 if (lyricsVisible === 'false') {
-  document.getElementById('lyrics-panel').classList.add('hidden');
+  document.getElementById('panel-lyrics').classList.add('hidden');
 }
 
 showToast('🎵 connecting to mox daemon… · press ? for shortcuts', 'info');
+drawVisualizer();
 </script>
 </body>
 </html>

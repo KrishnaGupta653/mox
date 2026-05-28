@@ -100,36 +100,73 @@ M_UPDATE_SHA256=""         # expected SHA256 for self-update
 UXI_AUTH=0                 # 1 = require web UI PIN on first visit
 
 # ── load user config ──────────────────────────────────────────
-# shellcheck disable=SC1090
-[ -f "$CONFIG_FILE" ] && source "$CONFIG_FILE"
+_load_config() {
+  [[ -f "$CONFIG_FILE" ]] || return 0
+
+  local -a allowed_keys
+  allowed_keys=(
+    CACHE_TTL HISTORY_MAX DEFAULT_VOLUME VOLUME_STEP SEARCH_RESULTS
+    AUDIO_DEVICE_SPEAKERS AUDIO_DEVICE_HEADPHONES SCROBBLE_URL
+    YTDLP_MAX_AGE_DAYS LASTFM_API_KEY YOUTUBE_API_KEY INVIDIOUS_HOST
+    LOCAL_MUSIC_DIR AUTODJ_ENABLED LYRICS_ENABLED AUTO_RESTART_DAEMON
+    NOTIFY_ENABLED CROSSFADE_SECS BAR_REFRESH_MS M_UPDATE_URL M_UPDATE_SHA256
+    UXI_AUTH YTDLP MPV FZF SOCAT JQ CURL CHAFA FFPROBE
+  )
+
+  local line key value allowed allowed_key
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [[ -z "$line" || "$line" == \#* ]] && continue
+
+    if [[ ! "$line" =~ '^[A-Z_][A-Z0-9_]*=[^;&|`$<>(){}[\]\\]*$' ]]; then
+      printf 'mox config: ignoring unsafe line: %s\n' "$line" >&2
+      continue
+    fi
+
+    key="${line%%=*}"
+    value="${line#*=}"
+    allowed=0
+    for allowed_key in "${allowed_keys[@]}"; do
+      [[ "$key" == "$allowed_key" ]] && { allowed=1; break; }
+    done
+    if [[ $allowed -ne 1 ]]; then
+      printf 'mox config: ignoring unknown key: %s\n' "$key" >&2
+      continue
+    fi
+
+    if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+      value="${value[2,-2]}"
+    elif [[ "$value" == \'*\' && "$value" == *\' ]]; then
+      value="${value[2,-2]}"
+    fi
+    typeset -g "$key=$value"
+  done < "$CONFIG_FILE"
+}
+_load_config
 
 # v4-S — validate config (safe under set -u)
 _validate_config() {
   local -a _cfg_checks
   _cfg_checks=(
-    "CACHE_TTL:${CACHE_TTL}:1:86400"
-    "HISTORY_MAX:${HISTORY_MAX}:10:100000"
-    "DEFAULT_VOLUME:${DEFAULT_VOLUME}:0:150"
-    "VOLUME_STEP:${VOLUME_STEP}:1:50"
-    "SEARCH_RESULTS:${SEARCH_RESULTS}:1:50"
-    "YTDLP_MAX_AGE_DAYS:${YTDLP_MAX_AGE_DAYS}:1:365"
+    "CACHE_TTL:${CACHE_TTL}:1:86400:3600"
+    "HISTORY_MAX:${HISTORY_MAX}:10:100000:500"
+    "DEFAULT_VOLUME:${DEFAULT_VOLUME}:0:150:80"
+    "VOLUME_STEP:${VOLUME_STEP}:1:50:5"
+    "SEARCH_RESULTS:${SEARCH_RESULTS}:1:50:20"
+    "YTDLP_MAX_AGE_DAYS:${YTDLP_MAX_AGE_DAYS}:1:365:30"
   )
-  local entry var val min max
+  local entry var val min max default
   for entry in "${_cfg_checks[@]}"; do
     var="${entry%%:*}"; local _rest="${entry#*:}"
     val="${_rest%%:*}"; _rest="${_rest#*:}"
     min="${_rest%%:*}"; max="${_rest#*:}"
+    default="${max#*:}"; max="${max%%:*}"
     if [[ ! "$val" =~ ^[0-9]+$ ]] || (( val < min || val > max )); then
       echo "${Y}⚠ config: ${var}=${val} is invalid (expected integer ${min}–${max}), using default${X}" >&2
+      typeset -g "$var=$default"
     fi
   done
-  [[ "$CACHE_TTL"      =~ ^[0-9]+$ ]] || CACHE_TTL=3600
-  [[ "$HISTORY_MAX"    =~ ^[0-9]+$ ]] || HISTORY_MAX=500
-  [[ "$DEFAULT_VOLUME" =~ ^[0-9]+$ ]] || DEFAULT_VOLUME=80
-  [[ "$VOLUME_STEP"    =~ ^[0-9]+$ ]] || VOLUME_STEP=5
-  [[ "$SEARCH_RESULTS" =~ ^[0-9]+$ ]] || SEARCH_RESULTS=20
-  (( DEFAULT_VOLUME > 150 )) && DEFAULT_VOLUME=150
-  (( VOLUME_STEP > 50 ))    && VOLUME_STEP=5
 }
 
 # ── colours ──────────────────────────────────────────────────
@@ -184,6 +221,19 @@ _lock() {
   local deadline=$(( $(date +%s) + timeout ))
   local steal_count=0 MAX_STEALS=3
 
+  if [[ "$OS" == "linux" ]] && command -v flock >/dev/null 2>&1; then
+    local fd
+    exec {fd}> "${lf}.flock" || return 1
+    if flock -w "$timeout" "$fd" 2>/dev/null; then
+      echo $$ > "$lf"
+      typeset -gA _MOX_LOCK_FDS
+      _MOX_LOCK_FDS[$lf]="$fd"
+      return 0
+    fi
+    eval "exec ${fd}>&-" 2>/dev/null
+    return 1
+  fi
+
   while true; do
     # Try atomic acquire
     if mkdir "${lf}.d" 2>/dev/null; then
@@ -198,13 +248,18 @@ _lock() {
         if [[ -n "$dead_pid" ]] && ! kill -0 "$dead_pid" 2>/dev/null; then
           # PID is dead. Two-phase steal: rename PID file first (atomic claim),
           # then rmdir only if rename succeeded — avoids TOCTOU race.
-          if mv "$lf" "${lf}.stale" 2>/dev/null; then
+          local steal_src="${lf}.steal.$$"
+          local steal_claim="${lf}.steal"
+          printf '%s:%s\n' "$$" "$(date +%s)" > "$steal_src" 2>/dev/null || return 1
+          if ln "$steal_src" "$steal_claim" 2>/dev/null; then
             rmdir "${lf}.d" 2>/dev/null
-            rm -f "${lf}.stale"
+            rm -f "$lf" "$steal_claim"
+            rm -f "$steal_src"
             steal_count=$(( steal_count + 1 ))
             deadline=$(( $(date +%s) + timeout ))
             continue  # immediately retry mkdir
           fi
+          rm -f "$steal_src"
         fi
       fi
       return 1  # live lock or max steals exceeded
@@ -215,6 +270,14 @@ _lock() {
 
 _unlock() {
   local lf="$1"
+  if [[ -n "${_MOX_LOCK_FDS[$lf]:-}" ]]; then
+    local fd="${_MOX_LOCK_FDS[$lf]}"
+    rm -f "$lf"
+    flock -u "$fd" 2>/dev/null
+    eval "exec ${fd}>&-" 2>/dev/null
+    unset "_MOX_LOCK_FDS[$lf]"
+    return
+  fi
   local stored_pid; stored_pid=$(cat "$lf" 2>/dev/null)
   if [[ "$stored_pid" == "$$" ]]; then
     rm -f "$lf"
@@ -515,15 +578,19 @@ _get_checked() {
 }
 
 _get_multi() {
-  local result="{" first=1
-  for prop in "$@"; do
-    local val; val=$(_get "$prop")
-    [[ $first -eq 0 ]] && result="${result},"
-    result="${result}\"${prop}\":$("$JQ" -n --arg v "$val" '$v' 2>/dev/null || echo "null")"
-    first=0
-  done
-  result="${result}}"
-  echo "$result"
+  local props_json
+  props_json=$(printf '%s\n' "$@" | "$JQ" -R . | "$JQ" -s . 2>/dev/null) || return 1
+  "$JQ" -cn --argjson props "$props_json" '
+    $props | to_entries[] |
+    {command:["get_property", .value], request_id:(.key + 1)}
+  ' 2>/dev/null | "$SOCAT" - "$SOCKET" 2>/dev/null | "$JQ" -cn --argjson props "$props_json" '
+    reduce inputs as $resp
+      ({};
+       if ($resp.request_id and $props[$resp.request_id - 1]) then
+         .[$props[$resp.request_id - 1]] =
+           (if (($resp.error // "success") == "success") then ($resp.data // "") else "" end)
+       else . end)
+  ' 2>/dev/null
 }
 
 # v5-A — _wait_prop: yields 0.3s before first poll, checks for hard errors,
@@ -687,52 +754,6 @@ _search_invidious() {
   ' 2>/dev/null
 }
 
-# _search_ytdlp() {
-#   local query="$1" n="${2:-$SEARCH_RESULTS}"
-#   local results
-#   results=$("$YTDLP" "ytsearch${n}:${query}" \
-#     --print "%(title)s | %(duration_string)s | %(webpage_url)s" \
-#     --no-download --no-warnings 2>/dev/null)
-
-#   # v5-Z: PIPESTATUS check — ytdlp exit code captured before pipe
-#   local ytdlp_rc=$?
-#   [[ $ytdlp_rc -ne 0 ]] && return 1
-
-#   echo "$results"
-# }
-
-# # _do_search: tries API → Invidious → yt-dlp, caches result
-# _do_search() {
-#   local query="$1" n="${2:-$SEARCH_RESULTS}"
-#   local key="$CACHE_DIR/$(_cache_key "$query").cache"
-
-#   if [ -f "$key" ] && [ "$(_cache_age "$key")" -lt "$CACHE_TTL" ]; then
-#     cat "$key"; return 0
-#   fi
-
-#   local results=""
-#   if [[ -n "$YOUTUBE_API_KEY" ]]; then
-#     results=$(_search_youtube_api "$query" "$n")
-#   fi
-#   if [[ -z "$results" && -n "$INVIDIOUS_HOST" ]]; then
-#     results=$(_search_invidious "$query" "$n")
-#   fi
-#   if [[ -z "$results" ]]; then
-#     _info "searching (yt-dlp)..." >&2
-#     results=$(_search_ytdlp "$query" "$n")
-#   fi
-
-#   local valid_count; valid_count=$(echo "$results" | grep -cE 'https?://' 2>/dev/null || echo 0)
-#   if [[ -n "$results" ]] && (( valid_count >= 1 )); then
-#     echo "$results" > "$key"
-#     echo "$results"
-#     return 0
-#   fi
-
-#   rm -f "$key"
-#   return 1
-# }
-
 # ── STREAMING yt-dlp search (results appear one by one) ──────
 _search_ytdlp_stream() {
   local query="$1" n="${2:-$SEARCH_RESULTS}"
@@ -866,33 +887,6 @@ _fzf_common() {
     --preview-window=down:3:wrap \
     --ansi
 }
-
-# _pick: standard search with cache, then fzf picker
-# Uses async UI if available, cached results otherwise
-# _pick() {
-#   local query="$1"
-#   local key="$CACHE_DIR/$(_cache_key "$query").cache"
-#   local results
-
-#   if [ -f "$key" ] && [ "$(_cache_age "$key")" -lt "$CACHE_TTL" ]; then
-#     results=$(cat "$key")
-#     _info "instant results (cached)" >&2
-#   else
-#     [[ -n "$YOUTUBE_API_KEY" || -n "$INVIDIOUS_HOST" ]] && _info "searching (API)..." >&2 || _info "searching (yt-dlp — add YOUTUBE_API_KEY to config for instant search)..." >&2
-#     results=$(_do_search "$query")
-#   fi
-
-#   [[ -z "$results" ]] && { _warn "no results for: $query"; return 1; }
-
-#   echo "$results" | "$FZF" \
-#     --height 55% --reverse \
-#     --prompt "🎵 " \
-#     --header "ENTER select · ESC cancel · cached=instant | ${#results}" \
-#     --preview 'echo {} | sed "s/ | /\n/g"' \
-#     --preview-window=down:3:wrap \
-#     --ansi \
-#   | awk -F ' \| ' '{print $NF}'
-# }
 
 _pick() {
   local query="$1"
@@ -1283,7 +1277,7 @@ do_stop() {
     fi
     rm -f "$MPV_PID_FILE"
   else
-    pkill -f "input-ipc-server=${SOCKET}" 2>/dev/null
+    _warn "mpv PID file missing; not killing by process pattern"
   fi
   rm -f "$SOCKET"
   # Only remove lock if we own it or no lock exists
@@ -1330,8 +1324,8 @@ do_auto_restart_toggle() {
   fi
   
   
-  # Reload configuration
-  [[ -f "$CONFIG_FILE" ]] && source "$CONFIG_FILE"
+  # Reload configuration (through sandbox — never source directly)
+  _load_config
 }
 
 do_version() {
@@ -1634,11 +1628,8 @@ do_bar() {
     else
       pos=$(_get time-pos); dur=$(_get duration); paused=$(_get pause)
       speed=$(_get speed); title2=$(_get media-title); repeat=$(_get loop-playlist)
-      loop_one=$(_get loop-file); vol=$(_get volume | awk '{printf "%.0f",$1}')
+      loop_one=$(_get loop-file); vol=$(_get volume)
     fi
-
-    speed=$(echo "$speed" | awk '{printf "%.2f",$1}')
-    vol=$(echo "$vol" | awk '{printf "%.0f",$1}')
 
     # v5-F: break on empty pos/dur, but cleanup runs after loop (not just trap)
     [ -z "$pos" ] || [ -z "$dur" ] && break
@@ -1647,6 +1638,9 @@ do_bar() {
     pos_i=$(printf '%.0f' "$pos" 2>/dev/null || echo 0)
     dur_i=$(printf '%.0f' "$dur" 2>/dev/null || echo 1)
     (( dur_i < 1 )) && dur_i=1
+    local speed_fmt vol_i
+    printf -v speed_fmt '%.2f' "${speed:-1}" 2>/dev/null || speed_fmt="1.00"
+    printf -v vol_i '%.0f' "${vol:-80}" 2>/dev/null || vol_i=80
 
     local pct=$(( pos_i * 100 / dur_i ))
     local buf_pct=""
@@ -1664,10 +1658,11 @@ do_bar() {
     (( filled < 0 )) && filled=0
     (( empty  < 0 )) && empty=0
 
-    local pos_fmt; pos_fmt=$(awk "BEGIN{printf \"%d:%02d\", $pos_i/60, $pos_i%60}")
-    local dur_fmt; dur_fmt=$(awk "BEGIN{printf \"%d:%02d\", $dur_i/60, $dur_i%60}")
+    local pos_fmt; printf -v pos_fmt '%d:%02d' $(( pos_i / 60 )) $(( pos_i % 60 ))
+    local dur_fmt; printf -v dur_fmt '%d:%02d' $(( dur_i / 60 )) $(( dur_i % 60 ))
     local rem_i=$(( dur_i - pos_i ))
-    local rem_fmt; rem_fmt=$(awk "BEGIN{printf \"-%d:%02d\", $rem_i/60, $rem_i%60}")
+    (( rem_i < 0 )) && rem_i=0
+    local rem_fmt; printf -v rem_fmt '-%d:%02d' $(( rem_i / 60 )) $(( rem_i % 60 ))
 
     local icon="▶"; [ "$paused" = "true" ] && icon="⏸"
     local rep_icon=""
@@ -1685,7 +1680,7 @@ do_bar() {
       "$bar_filled" "$bar_empty" "$pos_fmt" "$dur_fmt" "$rem_fmt"
     printf '\n\r\e[2K'
     printf "  \e[2mspd:%sx  vol:%s%%  %d%%%s  p=pause  n/b=skip  ,/.=seek  +/-=vol  r=rpt  l=lyrics  q=quit\e[0m" \
-      "$speed" "$vol" "$pct" "${buf_pct:+  buf:${buf_pct}%}"
+      "$speed_fmt" "$vol_i" "$pct" "${buf_pct:+  buf:${buf_pct}%}"
     printf '\e[2A'
 
     local key
@@ -2003,51 +1998,52 @@ do_save() {
   _ok "saved: ${name}  (${count} tracks)"
 }
 
+_playlist_entry_valid() {
+  local line="$1"
+  [[ -z "$line" || "$line" == \#* ]] && return 1
+  [[ ${#line} -le 500 ]] || return 1
+
+  if [[ "$line" =~ ^https?://[^[:space:]]+\.[^[:space:]]+(/.*)?$ ]]; then
+    [[ "$line" == *\"* || "$line" == *\'* || "$line" == *\<* || "$line" == *\>* ]] && return 1
+    [[ "$line" == *\|* || "$line" == *\;* || "$line" == *\$* || "$line" == *\`* ]] && return 1
+    [[ "$line" == *\&* || "$line" == *\ * ]] && return 1
+    return 0
+  fi
+
+  if [[ "$line" =~ ^file:///.+ ]]; then
+    local file_path="${line#file://}"
+    [[ -f "$file_path" ]]
+    return
+  fi
+
+  [[ -f "$line" ]]
+}
+
 do_load() {
   [ -z "${1:-}" ] && { _err "usage: mox load <n>"; return 1; }
   local f="$PLAYLIST_DIR/${1}.m3u"
   [ -f "$f" ] || { _err "playlist not found: $1"; return 1; }
-  
-  # Pre-validate playlist content before starting daemon
+
   local valid_urls=0
   local total_lines=0
   while IFS= read -r line; do
     [[ -z "$line" || "$line" == \#* ]] && continue
     total_lines=$((total_lines + 1))
-    
-    # Basic URL validation - must be a complete URL or existing file
-    # Also check reasonable length limits (URLs over 500 chars are problematic)
-    if [[ ${#line} -gt 500 ]]; then
-      continue  # Skip extremely long URLs
-    elif [[ "$line" =~ ^https?://[^[:space:]]+\.[^[:space:]]+(/.*)?$ ]]; then
-      # Additional check for problematic characters that can cause hanging
-      if [[ "$line" == *\"* ]] || [[ "$line" == *\'* ]] || [[ "$line" == *\<* ]] || [[ "$line" == *\>* ]] || \
-         [[ "$line" == *\|* ]] || [[ "$line" == *\;* ]] || [[ "$line" == *\$* ]] || [[ "$line" == *\`* ]] || \
-         [[ "$line" == *\&* ]] || [[ "$line" == *\ * ]]; then
-        continue  # Skip URLs with dangerous special characters or spaces
-      fi
-      valid_urls=$((valid_urls + 1))
-    elif [[ "$line" =~ ^file:///.+ ]]; then
-      # For file URLs, check if the file actually exists
-      local file_path="${line#file://}"
-      if [[ -f "$file_path" ]]; then
-        valid_urls=$((valid_urls + 1))
-      fi
-    elif [[ -f "$line" ]]; then
+    if _playlist_entry_valid "$line"; then
       valid_urls=$((valid_urls + 1))
     fi
   done < "$f"
-  
+
   if [ $total_lines -eq 0 ]; then
     _err "playlist is empty: $1"
     return 1
   fi
-  
+
   if [ $valid_urls -eq 0 ]; then
     _err "playlist contains no valid URLs: $1"
     return 1
   fi
-  
+
   _start
   _silent '{"command":["playlist-clear"]}'
   local _existing_urls
@@ -2056,27 +2052,8 @@ do_load() {
   local count=0
   while IFS= read -r line; do
     [[ -z "$line" || "$line" == \#* ]] && continue
-    
-    # Apply the same validation as pre-check
-    if [[ ${#line} -gt 500 ]]; then
-      continue  # Skip extremely long URLs
-    elif [[ "$line" =~ ^https?://[^[:space:]]+\.[^[:space:]]+(/.*)?$ ]]; then
-      # Check for problematic characters
-      if [[ "$line" == *\"* ]] || [[ "$line" == *\'* ]] || [[ "$line" == *\<* ]] || [[ "$line" == *\>* ]] || \
-         [[ "$line" == *\|* ]] || [[ "$line" == *\;* ]] || [[ "$line" == *\$* ]] || [[ "$line" == *\`* ]] || \
-         [[ "$line" == *\&* ]] || [[ "$line" == *\ * ]]; then
-        continue  # Skip URLs with dangerous special characters or spaces
-      fi
-    elif [[ "$line" =~ ^file:///.+ ]]; then
-      # For file URLs, check if the file actually exists
-      local file_path="${line#file://}"
-      if [[ ! -f "$file_path" ]]; then
-        continue  # Skip non-existent files
-      fi
-    elif [[ ! -f "$line" ]]; then
-      continue  # Skip non-existent local files
-    fi
-    
+    _playlist_entry_valid "$line" || continue
+
     if echo "$_existing_urls" | grep -qF "$line" 2>/dev/null; then
       _warn "skipping duplicate: $(basename "$line")"
       continue
@@ -2089,7 +2066,6 @@ do_load() {
   _info "first track buffering... use: mox now"
   _queue_snapshot
 }
-
 do_playlists() {
   echo ""
   echo "  ${C}saved playlists:${X}"
@@ -2935,12 +2911,12 @@ do_txt() {
       # Use flock(1) when available (Linux util-linux); fall back to mkdir on macOS.
       if command -v flock >/dev/null 2>&1; then
         (
-          flock -x 200
+          flock -x 9
           local val; val=$(cat "$sem" 2>/dev/null || echo 0)
           val=$(( val + delta ))
           (( val < 0 )) && val=0
           echo "$val" > "$sem"
-        ) 200>"$lock"
+        ) 9>"$lock"
       else
         local lockd="${sem}.lock.d"
         while ! mkdir "$lockd" 2>/dev/null; do sleep 0.02; done
@@ -2956,13 +2932,13 @@ do_txt() {
       local lock="${progress}.lock"
       if command -v flock >/dev/null 2>&1; then
         (
-          flock -x 200
+          flock -x 9
           local done_count total_count
           IFS=/ read -r done_count total_count < "$progress"
           done_count=${done_count:-0}
           total_count=${total_count:-${#TXT_LINES[@]}}
           echo "$(( done_count + 1 ))/${total_count}" > "$progress"
-        ) 200>"$lock"
+        ) 9>"$lock"
       else
         local lockd="${progress}.lock.d"
         while ! mkdir "$lockd" 2>/dev/null; do sleep 0.02; done
@@ -3577,7 +3553,7 @@ do_local() {
 # ── v5-V — mox reload-config: hot-reload without killing daemon ────────────────
 do_reload_config() {
   [ -f "$CONFIG_FILE" ] || { _warn "no config file at: $CONFIG_FILE"; return; }
-  source "$CONFIG_FILE"
+  _load_config
   _validate_config
   _ok "config reloaded from: $CONFIG_FILE"
   _info "note: daemon audio settings (device, volume) require mox stop && mox start to apply"
@@ -3992,26 +3968,15 @@ do_queue_dedup() {
   raw=$(_cmd '{"command":["get_property","playlist"]}')
   pl_count=$(echo "$raw" | "$JQ" '.data|length' 2>/dev/null || echo 0)
   [[ "$pl_count" -eq 0 ]] && { _warn "queue empty"; return; }
-  local -a urls seen
-  urls=($(echo "$raw" | "$JQ" -r '.data[].filename // empty' 2>/dev/null))
-  seen=()
-  local i=0 removed=0
-  while [[ $i -lt ${#urls[@]} ]]; do
-    local url="${urls[$i]}"
-    if [[ -n "$url" ]] && (( ${#seen[@]} > 0 )); then
-      local dup=0
-      for u in "${seen[@]}"; do
-        [[ "$u" == "$url" ]] && { dup=1; break; }
-      done
-      if [[ $dup -eq 1 ]]; then
-        _silent "{\"command\":[\"playlist-remove\",$((i - removed))]}"
-        removed=$(( removed + 1 ))
-        (( i++ ))
-        continue
-      fi
-    fi
-    [[ -n "$url" ]] && seen+=("$url")
-    (( i++ ))
+  local dup_indices
+  dup_indices=$(echo "$raw" | "$JQ" -r '.data[].filename // ""' 2>/dev/null \
+    | awk 'BEGIN { idx = 0 } { if ($0 != "" && seen[$0]++) print idx; idx++ }' \
+    | sort -rn)
+  local removed=0 idx
+  for idx in ${(f)dup_indices}; do
+    [[ -z "$idx" ]] && continue
+    _silent "{\"command\":[\"playlist-remove\",${idx}]}"
+    removed=$(( removed + 1 ))
   done
   [[ $removed -eq 0 ]] && _ok "no duplicates found" || _ok "removed ${removed} duplicate(s)"
 }
