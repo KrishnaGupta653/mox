@@ -216,6 +216,7 @@ _shuf1() {
 # Atomic sentinel: mkdir of <lockfile_base>.d
 # Stale steal: only steals if the owning PID is dead AND we successfully
 # mkdir AFTER removing the stale sentinel — never rmdir a live lock.
+typeset -gA _MOX_LOCK_FDS
 _lock() {
   local lf="$1" timeout="${2:-5}"
   local deadline=$(( $(date +%s) + timeout ))
@@ -4392,7 +4393,7 @@ EOF
 if [ $# -eq 0 ]; then
   if [ ! -S "$SOCKET" ]; then
     echo ""
-    echo "  ${B}mox${X} — terminal music CLI"
+    echo "  ${BOLD}mox${X} — terminal music CLI"
     echo "  run: ${G}mox help${X} for all commands"
     echo ""
     echo "  Quick start:"
