@@ -178,3 +178,7 @@ test-results/
 test-report-*.txt
 
 update.txt
+
+# Backup files
+*.bak
+src/mox.sh.bak

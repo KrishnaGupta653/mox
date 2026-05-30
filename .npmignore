@@ -42,3 +42,11 @@ build/
 __pycache__/
 */__pycache__/
 *.pyc
+
+# Backup files (never publish)
+*.bak
+mox.sh.bak
+
+# lib/ Python template rule — must allow src/lib/ shell modules
+lib/
+!src/lib/
