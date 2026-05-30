@@ -94,6 +94,45 @@ if not MUSIC_ROOT:
     print("❌ Error: Invalid MUSIC_ROOT path", file=sys.stderr)
     sys.exit(1)
 
+# ── Structured API error codes ────────────────────────────────────────────────
+# Every {"ok": False} response includes a machine-readable "code" field so
+# clients/scripts can handle errors without parsing human-readable "msg" strings.
+class E:
+    # Auth
+    CSRF_INVALID       = "csrf_invalid"
+    AUTH_REQUIRED      = "auth_required"
+    AUTH_INVALID       = "auth_invalid"
+    # Rate limiting / size
+    RATE_LIMITED       = "rate_limited"
+    BODY_TOO_LARGE     = "body_too_large"
+    # Input validation
+    INVALID_JSON       = "invalid_json"
+    INVALID_QUERY      = "invalid_query"
+    INVALID_CMD        = "invalid_cmd"
+    INVALID_ARGS       = "invalid_args"
+    MISSING_ARGS       = "missing_args"
+    # Playback / queue
+    SEEK_FAILED        = "seek_failed"
+    VOL_FAILED         = "vol_failed"
+    SPEED_FAILED       = "speed_failed"
+    QUEUE_TIMEOUT      = "queue_timeout"
+    QUEUE_FAILED       = "queue_failed"
+    QMOVE_INVALID      = "qmove_invalid"
+    CMD_UNKNOWN        = "cmd_unknown"
+    CMD_FAILED         = "cmd_failed"
+    LIKE_FAILED        = "like_failed"
+    AUTODJ_FAILED      = "autodj_failed"
+    EQ_INVALID         = "eq_invalid"
+    EQ_FAILED          = "eq_failed"
+    # Search / history
+    SEARCH_TIMEOUT     = "search_timeout"
+    SEARCH_FAILED      = "search_failed"
+    HISTORY_FAILED     = "history_failed"
+
+def _err(code: str, msg: str, **extra) -> dict:
+    """Return a standardised error dict with both machine code and human msg."""
+    return {"ok": False, "code": code, "msg": msg, **extra}
+
 SOCKET_PATH = os.path.join(MUSIC_ROOT, "socket", "mpv.sock")
 HISTORY_FILE = os.path.join(MUSIC_ROOT, "data", "history")
 HTML_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -101,10 +140,12 @@ CSRF_TOKEN = secrets.token_urlsafe(32)
 AUTH_TOKEN = secrets.token_urlsafe(32)
 UXI_AUTH_ENABLED = os.environ.get("UXI_AUTH") == "1"
 UXI_AUTH_PIN = f"{secrets.randbelow(1000000):06d}" if UXI_AUTH_ENABLED else ""
+FONTS_DIR = os.path.join(HTML_DIR, "fonts")
+PLUGINS_DIR = os.path.join(MUSIC_ROOT, "plugins")
 CSP_HEADER = (
     "default-src 'self'; "
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-    "font-src 'self' https://fonts.gstatic.com; "
+    "style-src 'self' 'unsafe-inline'; "
+    "font-src 'self'; "
     "script-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: https://img.youtube.com; "
     "connect-src 'self' https: http:; "
@@ -796,11 +837,17 @@ def _parse_search_output(stdout):
     return results[:20]
 
 
-def search_tracks(query):
-    """Run the CLI search path and return structured rows for the web UI."""
+def search_tracks(query: str, limit: int = 20) -> dict:
+    """Run the CLI search path and return structured rows for the web UI.
+    
+    Args:
+        query: Search query string.
+        limit: Max results to return (1-20, default 20).
+    """
     valid, err = _validate_query(query)
     if not valid:
-        return {"ok": False, "msg": err, "results": []}
+        return _err(E.INVALID_QUERY, err, results=[])
+    limit = max(1, min(20, int(limit)))
 
     try:
         result = subprocess.run(
@@ -811,15 +858,109 @@ def search_tracks(query):
             check=False,
         )
     except subprocess.TimeoutExpired:
-        return {"ok": False, "msg": "search timed out (try setting YOUTUBE_API_KEY for instant results)", "results": []}
+        return _err(E.SEARCH_TIMEOUT, "search timed out (try setting YOUTUBE_API_KEY for instant results)", results=[])
     except Exception as e:
         logger.error(f"Search command failed: {e}")
-        return {"ok": False, "msg": "search failed", "results": []}
+        return _err(E.SEARCH_FAILED, "search failed", results=[])
 
     rows = _parse_search_output(result.stdout)
     if result.returncode != 0 and not rows:
-        return {"ok": False, "msg": "search failed", "results": []}
-    return {"ok": True, "msg": "ok", "results": rows}
+        return _err(E.SEARCH_FAILED, "search failed", results=[])
+    return {"ok": True, "msg": "ok", "results": rows[:limit]}
+
+
+def get_related_tracks(title: str, limit: int = 3) -> dict:
+    """Find tracks related to `title` for the smart queue auto-append feature.
+
+    Strategy: strip the last word of the title to broaden the query slightly,
+    which usually removes a featuring artist and returns more varied results.
+    Falls through to the original title if stripping yields nothing useful.
+    """
+    title = title.strip()
+    if not title:
+        return _err(E.MISSING_ARGS, "title is required", results=[])
+
+    # Broaden: try artist+partial-title first, then full title as fallback
+    words = title.split()
+    broad_query = " ".join(words[:-1]) if len(words) > 2 else title
+    result = search_tracks(broad_query, limit=limit + 2)  # fetch extra to allow dedup
+    if not result["ok"] or not result["results"]:
+        result = search_tracks(title, limit=limit + 2)
+    if not result["ok"]:
+        return result
+    # Filter out exact title matches (don't re-queue the same song)
+    filtered = [r for r in result["results"] if r.get("title", "").lower() != title.lower()]
+    return {"ok": True, "msg": "ok", "results": filtered[:limit]}
+
+
+def get_plugins() -> dict:
+    """Scan PLUGINS_DIR and return plugin manifest metadata.
+
+    Each plugin file (.zsh/.sh) is parsed for structured header comments:
+        # mox-plugin: name=My Plugin
+        # mox-plugin: description=Does cool stuff
+        # mox-plugin: version=1.0.0
+        # mox-plugin: author=username
+        # mox-plugin: commands=cmd1,cmd2
+
+    Falls back to filename-based defaults for unstructured plugins.
+    """
+    if not os.path.isdir(PLUGINS_DIR):
+        return {"ok": True, "plugins": [], "dir": PLUGINS_DIR}
+
+    plugins = []
+    try:
+        for fname in sorted(os.listdir(PLUGINS_DIR)):
+            if not (fname.endswith(".zsh") or fname.endswith(".sh")):
+                continue
+            fpath = os.path.join(PLUGINS_DIR, fname)
+            meta: dict = {
+                "file": fname,
+                "name": fname.removesuffix(".zsh").removesuffix(".sh").replace("_", " ").title(),
+                "description": "",
+                "version": "",
+                "author": "",
+                "commands": [],
+                "size": 0,
+            }
+            try:
+                stat = os.stat(fpath)
+                meta["size"] = stat.st_size
+                with open(fpath, encoding="utf-8", errors="replace") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line.startswith("#"):
+                            break  # stop at first non-comment line
+                        # Parse: # mox-plugin: key=value
+                        if "mox-plugin:" in line:
+                            kv = line.split("mox-plugin:", 1)[1].strip()
+                            if "=" in kv:
+                                k, v = kv.split("=", 1)
+                                k = k.strip().lower()
+                                v = v.strip()
+                                if k == "name":
+                                    meta["name"] = v
+                                elif k == "description":
+                                    meta["description"] = v
+                                elif k == "version":
+                                    meta["version"] = v
+                                elif k == "author":
+                                    meta["author"] = v
+                                elif k == "commands":
+                                    meta["commands"] = [c.strip() for c in v.split(",") if c.strip()]
+                        # Also detect function names as commands if not declared
+                        if not meta["commands"] and line.startswith("do_"):
+                            cmd = line.split("(")[0].strip()
+                            if cmd not in meta["commands"]:
+                                meta["commands"].append(cmd)
+            except OSError:
+                pass
+            plugins.append(meta)
+    except OSError as e:
+        logger.error(f"Failed to read plugins dir: {e}")
+        return _err(E.HISTORY_FAILED, f"plugins dir error: {e}", plugins=[])
+
+    return {"ok": True, "plugins": plugins, "dir": PLUGINS_DIR, "count": len(plugins)}
 
 
 def _read_history_rows() -> list:
@@ -936,7 +1077,7 @@ def handle_cmd(cmd_str):
     """Execute an m-style command string against mpv."""
     valid, err = _validate_cmd(cmd_str)
     if not valid:
-        return {"ok": False, "msg": err}
+        return _err(E.INVALID_CMD, err)
 
     parts = cmd_str.strip().split()
     action = parts[0]
@@ -965,7 +1106,7 @@ def handle_cmd(cmd_str):
             else:
                 mpv_command(["seek", arg, "absolute"])
             return {"ok": True, "msg": f"seek {arg}"}
-        return {"ok": False, "msg": "seek needs argument"}
+        return _err(E.MISSING_ARGS, "seek needs argument")
 
     elif action in ("vol", "volume"):
         if len(parts) > 1:
@@ -983,7 +1124,7 @@ def handle_cmd(cmd_str):
                 except ValueError:
                     pass
             return {"ok": True, "msg": f"volume {arg}"}
-        return {"ok": False, "msg": "vol needs argument"}
+        return _err(E.MISSING_ARGS, "vol needs argument")
 
     elif action == "speed":
         if len(parts) > 1:
@@ -993,7 +1134,7 @@ def handle_cmd(cmd_str):
                 return {"ok": True, "msg": f"speed {s}"}
             except ValueError:
                 pass
-        return {"ok": False, "msg": "speed needs number"}
+        return _err(E.SPEED_FAILED, "speed needs number")
 
     elif action in ("repeat", "rp"):
         cur = mpv_get("loop-playlist") or "no"
@@ -1016,7 +1157,7 @@ def handle_cmd(cmd_str):
             query = " ".join(parts[1:])
             valid, err = _validate_query(query)
             if not valid:
-                return {"ok": False, "msg": err}
+                return _err(E.INVALID_CMD, err)
             try:
                 subprocess.run(
                     ["mox", query, "-a"],
@@ -1027,10 +1168,10 @@ def handle_cmd(cmd_str):
                 )
                 return {"ok": True, "msg": "queued"}
             except subprocess.TimeoutExpired:
-                return {"ok": False, "msg": "queue timed out"}
+                return _err(E.QUEUE_TIMEOUT, "queue timed out")
             except Exception as e:
-                return {"ok": False, "msg": f"queue failed: {str(e)}"}
-        return {"ok": False, "msg": "add needs query"}
+                return _err(E.QUEUE_FAILED, f"queue failed: {str(e)}")
+        return _err(E.MISSING_ARGS, "add needs query")
 
     elif action == "playlist-play-index":
         if len(parts) > 1:
@@ -1040,7 +1181,7 @@ def handle_cmd(cmd_str):
                 return {"ok": True, "msg": f"playing track {idx + 1}"}
             except ValueError:
                 pass
-        return {"ok": False, "msg": "need index"}
+        return _err(E.MISSING_ARGS, "need index")
 
     elif action == "qmove":
         if len(parts) > 2:
@@ -1048,12 +1189,12 @@ def handle_cmd(cmd_str):
                 from_idx = int(parts[1]) - 1
                 to_idx = int(parts[2]) - 1
                 if from_idx < 0 or to_idx < 0:
-                    return {"ok": False, "msg": "qmove positions must be positive"}
+                    return _err(E.QMOVE_INVALID, "qmove positions must be positive")
                 mpv_command(["playlist-move", from_idx, to_idx])
                 return {"ok": True, "msg": f"moved track {parts[1]} to {parts[2]}"}
             except ValueError:
                 pass
-        return {"ok": False, "msg": "qmove needs from/to positions"}
+        return _err(E.MISSING_ARGS, "qmove needs from/to positions")
 
     elif action == "clear":
         mpv_command(["playlist-clear"])
@@ -1071,7 +1212,7 @@ def handle_cmd(cmd_str):
                            stderr=subprocess.DEVNULL)
             return {"ok": True, "msg": "liked"}
         except Exception as e:
-            return {"ok": False, "msg": f"like failed: {str(e)}"}
+            return _err(E.LIKE_FAILED, f"like failed: {str(e)}")
 
     elif action == "autodj":
         # Use subprocess for safer execution
@@ -1081,14 +1222,14 @@ def handle_cmd(cmd_str):
                            stderr=subprocess.DEVNULL)
             return {"ok": True, "msg": "toggled autodj"}
         except Exception as e:
-            return {"ok": False, "msg": f"autodj failed: {str(e)}"}
+            return _err(E.AUTODJ_FAILED, f"autodj failed: {str(e)}")
 
     elif action == "eq":
         preset = parts[1] if len(parts) > 1 else "flat"
         # Whitelist valid presets
         valid_presets = {"flat", "bass", "treble", "vocal", "loud"}
         if preset not in valid_presets:
-            return {"ok": False, "msg": f"invalid eq preset: {preset}"}
+            return _err(E.EQ_INVALID, f"invalid eq preset: {preset}")
         
         mpv_command(["af", "set", ""])
         if preset != "flat":
@@ -1097,7 +1238,7 @@ def handle_cmd(cmd_str):
                                stdout=subprocess.DEVNULL, 
                                stderr=subprocess.DEVNULL)
             except Exception as e:
-                return {"ok": False, "msg": f"eq failed: {str(e)}"}
+                return _err(E.EQ_FAILED, f"eq failed: {str(e)}")
         return {"ok": True, "msg": f"eq {preset}"}
 
     # For other whitelisted commands, use subprocess for safety
@@ -1109,7 +1250,7 @@ def handle_cmd(cmd_str):
                 if rest:
                     # Validate subcommand arguments
                     if not re.match(r'^[a-zA-Z0-9\s\-+.:]+$', rest):
-                        return {"ok": False, "msg": "invalid mox arguments"}
+                        return _err(E.INVALID_ARGS, "invalid mox arguments")
                     subprocess.Popen(["mox"] + rest.split(), 
                                    stdout=subprocess.DEVNULL, 
                                    stderr=subprocess.DEVNULL)
@@ -1124,9 +1265,9 @@ def handle_cmd(cmd_str):
                                stderr=subprocess.DEVNULL)
             return {"ok": True, "msg": f"executed: {cmd_str}"}
         except Exception as e:
-            return {"ok": False, "msg": f"command failed: {str(e)}"}
+            return _err(E.CMD_FAILED, f"command failed: {str(e)}")
     
-    return {"ok": False, "msg": f"unknown command: {action}"}
+    return _err(E.CMD_UNKNOWN, f"unknown command: {action}")
 
 
 # ── SSE: connection state machine ─────────────────────────────────────────────
@@ -1248,16 +1389,20 @@ class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 class UXIHandler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
+    def setup(self):
+        """Called once per connection — assign a short request ID for log correlation."""
+        super().setup()
+        self._req_id = secrets.token_hex(4)  # e.g. 'a3f1b8c2'
+
     def log_message(self, format, *args):
-        # Log to our logger instead of stderr
-        logger.info(f"{self.address_string()} - {format % args}")
-    
+        logger.info(f"[{self._req_id}] {self.address_string()} - {format % args}")
+
     def log_error(self, format, *args):
-        logger.error(f"{self.address_string()} - {format % args}")
-    
+        logger.error(f"[{self._req_id}] {self.address_string()} - {format % args}")
+
     def handle_exception(self, e):
         """Handle exceptions in request processing."""
-        logger.error(f"Request handling error: {e}", exc_info=True)
+        logger.error(f"[{self._req_id}] Request handling error: {e}", exc_info=True)
         try:
             self.send_error(500, "Internal server error")
         except Exception:
@@ -1315,18 +1460,36 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             elif path == "/api/v2/search":
                 params = urllib.parse.parse_qs(parsed.query)
                 query = (params.get("q") or [""])[0]
-                self._json_response(search_tracks(query))
+                try:
+                    limit = int((params.get("limit") or ["20"])[0])
+                except (ValueError, TypeError):
+                    limit = 20
+                self._json_response(search_tracks(query, limit))
             elif path == "/api/v2/history":
                 params = urllib.parse.parse_qs(parsed.query)
                 page = (params.get("page") or ["1"])[0]
                 limit = (params.get("limit") or ["50"])[0]
                 self._json_response(get_history(page, limit))
+            elif path == "/api/v2/related":
+                params = urllib.parse.parse_qs(parsed.query)
+                title = (params.get("title") or [""])[0]
+                try:
+                    limit = min(5, int((params.get("limit") or ["3"])[0]))
+                except (ValueError, TypeError):
+                    limit = 3
+                self._json_response(get_related_tracks(title, limit))
+            elif path == "/api/v2/plugins":
+                self._json_response(get_plugins())
             elif path == "/api/v2/health":
                 self._json_response({"ok": True, "mpv": mpv_alive(), "time": int(time.time())})
             elif path in ("/manifest.json", "/manifest.webmanifest"):
                 self._serve_manifest()
+            elif path == "/sw.js":
+                self._serve_sw()
+            elif path.startswith("/fonts/"):
+                self._serve_font(path)
             else:
-                logger.warning(f"404 - Path not found: {path}")
+                logger.warning(f"[{self._req_id}] 404 - Path not found: {path}")
                 self.send_error(404)
         except Exception as e:
             self.handle_exception(e)
@@ -1350,6 +1513,54 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.end_headers()
         self.wfile.write(body)
+
+    def _serve_sw(self) -> None:
+        """Serve the service worker JS — no-cache so updates deploy instantly."""
+        sw_path = os.path.join(HTML_DIR, "sw.js")
+        try:
+            with open(sw_path, "rb") as f:
+                body = f.read()
+        except OSError:
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "application/javascript")
+        self.send_header("Content-Length", len(body))
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.send_header("Service-Worker-Allowed", "/")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_font(self, path: str) -> None:
+        """Serve a self-hosted woff2 font file from FONTS_DIR."""
+        # Extract just the filename — allowlist only our known fonts
+        fname = os.path.basename(path)
+        allowed = {
+            "dm_serif_display_italic.woff2",
+            "dm_serif_display_regular.woff2",
+            "space_mono_italic_400.woff2",
+            "space_mono_regular_400.woff2",
+            "space_mono_bold_700.woff2",
+        }
+        if fname not in allowed:
+            self.send_error(404)
+            return
+        font_path = os.path.join(FONTS_DIR, fname)
+        try:
+            with open(font_path, "rb") as f:
+                body = f.read()
+        except OSError:
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "font/woff2")
+        self.send_header("Content-Length", len(body))
+        # woff2 files are content-addressed (version in filename) — safe to cache 1yr
+        self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
+        self.wfile.write(body)
+
 
     def _serve_sse(self):
         """Serve Server-Sent Events stream using the _SseClient state machine."""
@@ -1404,13 +1615,13 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
 
             if not self._validate_csrf():
                 logger.warning(f"CSRF validation failed for {self.address_string()}")
-                self._json_response({"ok": False, "msg": "invalid session token"}, 403)
+                self._json_response(_err(E.CSRF_INVALID, "invalid session token"), 403)
                 return
 
             if path == "/api/auth":
                 self._handle_auth_request()
             elif not self._validate_auth():
-                self._json_response({"ok": False, "msg": "PIN required"}, 401)
+                self._json_response(_err(E.AUTH_REQUIRED, "PIN required"), 401)
             elif path in ("/api/cmd", "/api/v2/cmd"):
                 self._handle_cmd_request()
             elif path in ("/api/play", "/api/v2/play"):
@@ -1427,7 +1638,7 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
         try:
             data = json.loads(body)
         except json.JSONDecodeError:
-            self._json_response({"ok": False, "msg": "invalid JSON"}, 400)
+            self._json_response(_err(E.INVALID_JSON, "invalid JSON"), 400)
             return
         pin = str(data.get("pin", ""))
         if UXI_AUTH_ENABLED and secrets.compare_digest(pin, UXI_AUTH_PIN):
@@ -1442,21 +1653,21 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
         elif not UXI_AUTH_ENABLED:
             self._json_response({"ok": True, "msg": "auth disabled"})
         else:
-            self._json_response({"ok": False, "msg": "invalid PIN"}, 401)
+            self._json_response(_err(E.AUTH_INVALID, "invalid PIN"), 401)
     
     def _handle_cmd_request(self):
         """Handle /api/cmd POST requests."""
         try:
             if not _check_rate_limit(self.address_string()):
                 logger.warning(f"Rate limit exceeded for {self.address_string()}")
-                self._json_response({"ok": False, "msg": "rate limit exceeded"}, 429)
+                self._json_response(_err(E.RATE_LIMITED, "rate limit exceeded"), 429)
                 return
             
             # Validate content length
             length = int(self.headers.get("Content-Length", 0))
             if length > 10000:  # 10KB limit
                 logger.warning(f"Request too large: {length} bytes")
-                self._json_response({"ok": False, "msg": "request too large"}, 413)
+                self._json_response(_err(E.BODY_TOO_LARGE, "request too large"), 413)
                 return
             
             body = self.rfile.read(length).decode(errors="replace") if length else "{}"
@@ -1465,19 +1676,19 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
                 data = json.loads(body)
             except json.JSONDecodeError as e:
                 logger.warning(f"Invalid JSON in cmd request: {e}")
-                self._json_response({"ok": False, "msg": "invalid JSON"}, 400)
+                self._json_response(_err(E.INVALID_JSON, "invalid JSON"), 400)
                 return
             
             # Validate that data is a dict and has cmd field
             if not isinstance(data, dict):
                 logger.warning("Request data is not a JSON object")
-                self._json_response({"ok": False, "msg": "request must be JSON object"}, 400)
+                self._json_response(_err(E.INVALID_JSON, "request must be JSON object"), 400)
                 return
             
             cmd_str = data.get("cmd", "")
             if not cmd_str:
                 logger.warning("Missing cmd field in request")
-                self._json_response({"ok": False, "msg": "missing cmd field"}, 400)
+                self._json_response(_err(E.MISSING_ARGS, "missing cmd field"), 400)
                 return
             
             logger.info(f"Command request: {cmd_str}")
@@ -1492,7 +1703,7 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             
         except Exception as e:
             logger.error(f"Error handling cmd request: {e}")
-            self._json_response({"ok": False, "msg": "internal error"}, 500)
+            self._json_response(_err(E.CMD_FAILED, "internal error"), 500)
     
     def _handle_play_request(self):
         """Handle /api/play POST requests."""
@@ -1501,7 +1712,7 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", 0))
             if length > 10000:  # 10KB limit
                 logger.warning(f"Play request too large: {length} bytes")
-                self._json_response({"ok": False, "msg": "request too large"}, 413)
+                self._json_response(_err(E.BODY_TOO_LARGE, "request too large"), 413)
                 return
             
             body = self.rfile.read(length).decode(errors="replace") if length else "{}"
@@ -1510,19 +1721,19 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
                 data = json.loads(body)
             except json.JSONDecodeError as e:
                 logger.warning(f"Invalid JSON in play request: {e}")
-                self._json_response({"ok": False, "msg": "invalid JSON"}, 400)
+                self._json_response(_err(E.INVALID_JSON, "invalid JSON"), 400)
                 return
             
             # Validate that data is a dict
             if not isinstance(data, dict):
                 logger.warning("Play request data is not a JSON object")
-                self._json_response({"ok": False, "msg": "request must be JSON object"}, 400)
+                self._json_response(_err(E.INVALID_JSON, "request must be JSON object"), 400)
                 return
             
             # Check for required query field
             if "query" not in data:
                 logger.warning("Missing query field in play request")
-                self._json_response({"ok": False, "msg": "missing query field"}, 400)
+                self._json_response(_err(E.MISSING_ARGS, "missing query field"), 400)
                 return
             
             query = data.get("query", "")
@@ -1540,16 +1751,16 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
                     _state_cache.invalidate()
                     self._json_response({"ok": True, "msg": f"playing: {query}"})
                 except subprocess.TimeoutExpired:
-                    self._json_response({"ok": False, "msg": "play timed out"}, 504)
+                    self._json_response(_err(E.QUEUE_TIMEOUT, "play timed out"), 504)
                 except Exception as e:
                     logger.error(f"Play command failed: {e}")
-                    self._json_response({"ok": False, "msg": f"play failed: {str(e)}"}, 500)
+                    self._json_response(_err(E.CMD_FAILED, f"play failed: {str(e)}"), 500)
             else:
-                self._json_response({"ok": False, "msg": err}, 400)
+                self._json_response(_err(E.INVALID_QUERY, err), 400)
                 
         except Exception as e:
             logger.error(f"Error handling play request: {e}")
-            self._json_response({"ok": False, "msg": "internal error"}, 500)
+            self._json_response(_err(E.CMD_FAILED, "internal error"), 500)
 
     def _serve_html(self):
         html_path = os.path.join(HTML_DIR, "music_ui.html")

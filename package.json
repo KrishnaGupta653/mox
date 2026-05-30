@@ -20,7 +20,7 @@
     "test:edge-cases": "./tests/test-edge-cases.sh",
     "prepack": "npm run test",
     "start": "./mox help",
-    "lint": "shellcheck src/mox.sh || true",
+    "lint": "shellcheck src/mox.sh src/lib/*.sh || true",
     "security": "npm run test:security"
   },
   "keywords": [
@@ -84,7 +84,12 @@
   "preferGlobal": true,
   "files": [
     "mox",
-    "src/",
+    "src/mox.sh",
+    "src/lib/",
+    "src/music_ui_server.py",
+    "src/music_ui.html",
+    "src/sw.js",
+    "src/fonts/",
     "scripts/",
     "VERSION",
     "LICENSE",
