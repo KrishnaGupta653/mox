@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>mox — music</title>
+<title>mox â€” music</title>
 <meta name="theme-color" content="#c8ff5a">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230a0a0b'/%3E%3Ccircle cx='32' cy='32' r='19' fill='%23c8ff5a'/%3E%3Ccircle cx='32' cy='32' r='7' fill='%230a0a0b'/%3E%3C/svg%3E">
 <style>
-  /* Self-hosted fonts — served from /fonts/ by music_ui_server.py (no CDN, works offline) */
+  /* Self-hosted fonts â€” served from /fonts/ by music_ui_server.py (no CDN, works offline) */
   @font-face {
     font-family: 'DM Serif Display';
     font-style: normal;
@@ -142,7 +142,7 @@
   body.mini .ctrl-btn { font-size: 12px; padding: 4px; }
   body.mini .ctrl-btn.primary { width: 34px; height: 34px; }
 
-  /* ── HEADER ── */
+  /* â”€â”€ HEADER â”€â”€ */
   .header {
     grid-column: 1 / -1;
     display: flex;
@@ -249,7 +249,7 @@
 
   @keyframes shimmer { to { transform: translateX(100%); } }
 
-  /* ── SIDEBAR ── */
+  /* â”€â”€ SIDEBAR â”€â”€ */
   .sidebar {
     grid-row: 2;
     display: flex;
@@ -257,7 +257,7 @@
     gap: 12px;
   }
 
-  /* ── MAIN ── */
+  /* â”€â”€ MAIN â”€â”€ */
   .main {
     grid-row: 2;
     display: flex;
@@ -265,7 +265,7 @@
     gap: 12px;
   }
 
-  /* ── CARD ── */
+  /* â”€â”€ CARD â”€â”€ */
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -283,7 +283,7 @@
     margin-bottom: 16px;
   }
 
-  /* ── NOW PLAYING ── */
+  /* â”€â”€ NOW PLAYING â”€â”€ */
   .now-playing {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -370,7 +370,7 @@
     letter-spacing: 1px;
   }
 
-  /* ── PROGRESS BAR ── */
+  /* â”€â”€ PROGRESS BAR â”€â”€ */
   .progress-wrap {
     position: relative;
     cursor: pointer;
@@ -430,7 +430,7 @@
     margin-top: 4px;
   }
 
-  /* ── CONTROLS ── */
+  /* â”€â”€ CONTROLS â”€â”€ */
   .controls {
     display: flex;
     align-items: center;
@@ -469,7 +469,7 @@
   [data-theme="light"] .ctrl-btn.primary { color: #fff; }
   [data-theme="light"] .ctrl-btn.primary:hover { background: #3a9e00; }
 
-  /* ── VOLUME ── */
+  /* â”€â”€ VOLUME â”€â”€ */
   .volume-row {
     display: flex;
     align-items: center;
@@ -526,7 +526,7 @@
     box-shadow: 0 0 6px var(--accent);
   }
 
-  /* ── QUEUE ── */
+  /* â”€â”€ QUEUE â”€â”€ */
   .queue-list {
     position: relative;
     max-height: 300px;
@@ -717,7 +717,7 @@
   .tab-panel.active { display: block; }
   .tab-panel.active.lyrics-panel { display: flex; }
 
-  /* ── LYRICS PANEL ── */
+  /* â”€â”€ LYRICS PANEL â”€â”€ */
   .lyrics-panel {
     flex: 1;
     display: flex;
@@ -756,7 +756,7 @@
 
   .lyric-line.past { color: var(--dim); }
 
-  /* ── MINI STATS ── */
+  /* â”€â”€ MINI STATS â”€â”€ */
   .stats-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -784,7 +784,7 @@
     text-transform: uppercase;
   }
 
-  /* ── COMMAND BAR ── */
+  /* â”€â”€ COMMAND BAR â”€â”€ */
   .cmd-bar {
     grid-column: 1 / -1;
     display: flex;
@@ -875,7 +875,7 @@
   .cmd-suggestion:hover { background: var(--surface2); color: var(--accent); }
   .cmd-suggestion small { color: var(--muted); text-align: right; }
 
-  /* ── TAGS ── */
+  /* â”€â”€ TAGS â”€â”€ */
   .tag {
     display: inline-flex;
     align-items: center;
@@ -895,7 +895,7 @@
   [data-theme="light"] .tag-cyan { border-color: rgba(0,138,110,0.4); background: rgba(0,138,110,0.08); }
   [data-theme="light"] .tag-pink { border-color: rgba(196,30,58,0.4); background: rgba(196,30,58,0.08); }
 
-  /* ── SHORTCUT LEGEND OVERLAY ── */
+  /* â”€â”€ SHORTCUT LEGEND OVERLAY â”€â”€ */
   .shortcut-overlay {
     position: fixed;
     inset: 0;
@@ -962,7 +962,7 @@
     color: var(--text);
   }
 
-  /* ── MODAL / TOAST ── */
+  /* â”€â”€ MODAL / TOAST â”€â”€ */
   .toast-stack {
     position: fixed;
     right: 24px;
@@ -1133,7 +1133,7 @@
     }
   }
 
-  /* ── RESPONSIVE ── */
+  /* â”€â”€ RESPONSIVE â”€â”€ */
   @media (max-width: 900px) {
     body.sidebar-open { overflow: hidden; }
     .layout {
@@ -1242,16 +1242,16 @@
 
   <!-- HEADER -->
   <header class="header">
-    <div class="logo">mox<span>terminal music CLI v7.2.2 · <kbd style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:11px;color:var(--accent)">mox uxi</kbd> to open</span></div>
+    <div class="logo">mox<span>terminal music CLI v7.2.2 Â· <kbd style="background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-size:11px;color:var(--accent)">mox uxi</kbd> to open</span></div>
     <div class="header-right">
       <button class="theme-toggle" onclick="toggleSidebar()" title="Toggle player drawer" aria-label="Toggle player drawer">panel</button>
-      <span class="tag tag-green" id="autodj-badge" style="display:none" role="status" aria-label="Auto-DJ enabled">🤖 auto-dj</span>
-      <span class="tag tag-pink" id="repeat-badge" style="display:none" role="status" aria-label="Repeat enabled">🔁 repeat</span>
-      <span class="tag tag-cyan" id="loop-one-badge" style="display:none" role="status" aria-label="Loop one enabled">🔂 loop one</span>
-      <button class="theme-toggle" id="theme-toggle" title="Toggle dark/light mode" aria-label="Toggle theme">🌙</button>
+      <span class="tag tag-green" id="autodj-badge" style="display:none" role="status" aria-label="Auto-DJ enabled">ðŸ¤– auto-dj</span>
+      <span class="tag tag-pink" id="repeat-badge" style="display:none" role="status" aria-label="Repeat enabled">ðŸ” repeat</span>
+      <span class="tag tag-cyan" id="loop-one-badge" style="display:none" role="status" aria-label="Loop one enabled">ðŸ”‚ loop one</span>
+      <button class="theme-toggle" id="theme-toggle" title="Toggle dark/light mode" aria-label="Toggle theme">ðŸŒ™</button>
       <div class="status-badge">
         <div class="status-dot" id="status-dot" role="status" aria-live="polite"></div>
-        <span id="daemon-status">connecting…</span>
+        <span id="daemon-status">connectingâ€¦</span>
       </div>
     </div>
   </header>
@@ -1263,7 +1263,7 @@
         <div class="card-label">now playing</div>
         <button class="eq-btn" id="share-btn" onclick="shareLink()" title="Copy shareable link"
                 style="font-size:10px;padding:2px 7px;opacity:0.7;" aria-label="Copy link to current track">
-          🔗 share
+          ðŸ”— share
         </button>
       </div>
 
@@ -1275,7 +1275,7 @@
         <div class="marquee-wrap">
           <div class="track-title" id="track-title">nothing playing</div>
         </div>
-        <div class="track-meta" id="track-meta">— connecting… —</div>
+        <div class="track-meta" id="track-meta">â€” connectingâ€¦ â€”</div>
       </div>
 
       <!-- Progress -->
@@ -1294,22 +1294,22 @@
 
       <!-- Controls -->
       <div class="controls">
-        <button class="ctrl-btn" onclick="cmd('repeat')" id="btn-repeat" title="Toggle repeat (mox repeat)">🔁</button>
-        <button class="ctrl-btn" onclick="cmd('prev')" title="Previous (mox prev)">⏮</button>
-        <button class="ctrl-btn" onclick="cmd('seek -10')" title="Back 10s">⏪</button>
-        <button class="ctrl-btn primary" id="play-btn" onclick="cmd('pause')" title="Play/Pause (mox pause)">▶</button>
-        <button class="ctrl-btn" onclick="cmd('seek +10')" title="Forward 10s">⏩</button>
-        <button class="ctrl-btn" onclick="cmd('next')" title="Next (mox next)">⏭</button>
-        <button class="ctrl-btn" onclick="cmd('like')" title="Like track (mox like)">♡</button>
+        <button class="ctrl-btn" onclick="cmd('repeat')" id="btn-repeat" title="Toggle repeat (mox repeat)">ðŸ”</button>
+        <button class="ctrl-btn" onclick="cmd('prev')" title="Previous (mox prev)">â®</button>
+        <button class="ctrl-btn" onclick="cmd('seek -10')" title="Back 10s">âª</button>
+        <button class="ctrl-btn primary" id="play-btn" onclick="cmd('pause')" title="Play/Pause (mox pause)">â–¶</button>
+        <button class="ctrl-btn" onclick="cmd('seek +10')" title="Forward 10s">â©</button>
+        <button class="ctrl-btn" onclick="cmd('next')" title="Next (mox next)">â­</button>
+        <button class="ctrl-btn" onclick="cmd('like')" title="Like track (mox like)">â™¡</button>
       </div>
 
       <!-- Volume -->
       <div class="volume-row">
-        <span>🔈</span>
+        <span>ðŸ”ˆ</span>
         <input type="range" class="vol-slider" id="vol-slider" min="0" max="150" value="80"
                oninput="setVolume(this.value)">
         <span id="vol-val">80%</span>
-        <span>🔊</span>
+        <span>ðŸ”Š</span>
       </div>
 
       <div class="speed-row">
@@ -1338,11 +1338,11 @@
           <div class="stat-lbl">speed</div>
         </div>
         <div class="stat-cell">
-          <div class="stat-val" id="stat-pos" style="color:var(--accent)">—</div>
+          <div class="stat-val" id="stat-pos" style="color:var(--accent)">â€”</div>
           <div class="stat-lbl">track pos</div>
         </div>
         <div class="stat-cell">
-          <div class="stat-val" id="stat-pct" style="color:var(--muted)">—</div>
+          <div class="stat-val" id="stat-pct" style="color:var(--muted)">â€”</div>
           <div class="stat-lbl">progress</div>
         </div>
       </div>
@@ -1359,7 +1359,7 @@
       <div class="autodj-row" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
         <div>
           <div class="card-label" style="margin-bottom:4px">smart queue</div>
-          <div class="history-meta" id="smartq-status">off — auto-appends related tracks</div>
+          <div class="history-meta" id="smartq-status">off â€” auto-appends related tracks</div>
         </div>
         <button class="eq-btn" id="smartq-toggle" onclick="toggleSmartQueue()">toggle</button>
       </div>
@@ -1383,14 +1383,14 @@
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
         <div class="card-label" style="margin-bottom:0">queue</div>
         <div style="display:flex;gap:8px;">
-          <button class="eq-btn" onclick="cmd('shuffle')">🔀 shuffle</button>
-          <button class="eq-btn" onclick="cmd('clear')">🗑 clear</button>
+          <button class="eq-btn" onclick="cmd('shuffle')">ðŸ”€ shuffle</button>
+          <button class="eq-btn" onclick="cmd('clear')">ðŸ—‘ clear</button>
         </div>
       </div>
       <input class="queue-filter" id="queue-filter" placeholder="filter queue" oninput="updateQueue()">
       <div class="queue-list" id="queue-list">
         <div style="color:var(--muted);font-size:12px;padding:20px 0;text-align:center;">
-          queue empty — type a song below to play
+          queue empty â€” type a song below to play
         </div>
       </div>
     </div>
@@ -1404,7 +1404,7 @@
                onkeydown="if(event.key==='Enter'){cancelLiveSuggest();runSearch();} else if(event.key==='Escape'){clearSearch();}"
                autocomplete="off" spellcheck="false">
         <button class="eq-btn" onclick="runSearch()" title="Full search (20 results)">search</button>
-        <button class="eq-btn" onclick="clearSearch()" title="Clear" style="padding:0 8px;">✕</button>
+        <button class="eq-btn" onclick="clearSearch()" title="Clear" style="padding:0 8px;">âœ•</button>
       </div>
       <div id="search-results">
         <div style="color:var(--muted);font-size:12px;">type a song, artist, or URL</div>
@@ -1414,7 +1414,7 @@
     <div class="card lyrics-panel tab-panel" id="panel-lyrics" style="min-height:200px;">
       <div class="card-label">lyrics <span class="tag tag-cyan" style="margin-left:8px;">lrclib.net</span></div>
       <div class="lyrics-content" id="lyrics-content">
-        <div class="lyric-line active">♪ no lyrics loaded</div>
+        <div class="lyric-line active">â™ª no lyrics loaded</div>
         <div class="lyric-line">run: mox lyrics</div>
       </div>
     </div>
@@ -1479,7 +1479,7 @@
         <button class="eq-btn" id="eq-norm"   onclick="cmd('norm')">&#9878; normalize</button>
       </div>
       <div id="eq-bands" style="display:flex;gap:6px;justify-content:space-between;align-items:flex-end;height:120px;margin-bottom:8px;">
-        <!-- 7 frequency bands — populated by initEqSliders() -->
+        <!-- 7 frequency bands â€” populated by initEqSliders() -->
       </div>
       <div style="display:flex;justify-content:space-between;">
         <span style="font-size:10px;color:var(--muted);">60Hz</span>
@@ -1518,7 +1518,7 @@
   <!-- COMMAND BAR -->
   <div class="cmd-bar">
     <span class="cmd-prefix">mox</span>
-    <input class="cmd-input" id="cmd-input" placeholder='search & play: "lofi beats"  or  pause · next · vol 80 · seek +10 · shuffle · repeat'
+    <input class="cmd-input" id="cmd-input" placeholder='search & play: "lofi beats"  or  pause Â· next Â· vol 80 Â· seek +10 Â· shuffle Â· repeat'
            onkeydown="handleCmd(event)" oninput="updateCommandSuggestions()" onfocus="updateCommandSuggestions()" onblur="setTimeout(hideCommandSuggestions, 120)">
     <span class="cmd-pending"><span class="loading-spinner"></span> running</span>
     <div class="cmd-suggestions" id="cmd-suggestions"></div>
@@ -1526,8 +1526,8 @@
       <span class="cmd-hint" onclick="quickPlay('lofi hip hop')">lofi</span>
       <span class="cmd-hint" onclick="quickPlay('jazz classics')">jazz</span>
       <span class="cmd-hint" onclick="quickPlay('synthwave')">synth</span>
-      <span class="cmd-hint" onclick="cmd('repeat')">🔁</span>
-      <span class="cmd-hint" onclick="cmd('shuffle')">🔀</span>
+      <span class="cmd-hint" onclick="cmd('repeat')">ðŸ”</span>
+      <span class="cmd-hint" onclick="cmd('shuffle')">ðŸ”€</span>
       <span class="cmd-hint" onclick="document.getElementById('cmd-input').focus()">/ focus</span>
     </div>
   </div>
@@ -1543,9 +1543,9 @@
     </div>
   </div>
   <div class="bottom-controls">
-    <button class="ctrl-btn" onclick="cmd('prev')" title="Previous">⏮</button>
-    <button class="ctrl-btn primary" id="bottom-play-btn" onclick="cmd('pause')" title="Play/Pause">▶</button>
-    <button class="ctrl-btn" onclick="cmd('next')" title="Next">⏭</button>
+    <button class="ctrl-btn" onclick="cmd('prev')" title="Previous">â®</button>
+    <button class="ctrl-btn primary" id="bottom-play-btn" onclick="cmd('pause')" title="Play/Pause">â–¶</button>
+    <button class="ctrl-btn" onclick="cmd('next')" title="Next">â­</button>
   </div>
   <div class="bottom-progress">
     <div class="progress-track">
@@ -1559,23 +1559,23 @@
 <!-- Shortcut Legend Overlay -->
 <div class="shortcut-overlay" id="shortcut-overlay" onclick="toggleShortcutOverlay(event)">
   <div class="shortcut-modal" onclick="event.stopPropagation()">
-    <h2>⌨ Keyboard shortcuts</h2>
+    <h2>âŒ¨ Keyboard shortcuts</h2>
     <div class="shortcut-grid">
       <div class="shortcut-item"><span class="shortcut-key">Space</span><span class="shortcut-desc">Play / Pause</span></div>
       <div class="shortcut-item"><span class="shortcut-key">n</span><span class="shortcut-desc">Next track</span></div>
       <div class="shortcut-item"><span class="shortcut-key">b</span><span class="shortcut-desc">Previous track</span></div>
       <div class="shortcut-item"><span class="shortcut-key">l</span><span class="shortcut-desc">Toggle lyrics panel</span></div>
       <div class="shortcut-item"><span class="shortcut-key">+</span><span class="shortcut-desc">Volume up</span></div>
-      <div class="shortcut-item"><span class="shortcut-key">−</span><span class="shortcut-desc">Volume down</span></div>
-      <div class="shortcut-item"><span class="shortcut-key">,</span><span class="shortcut-desc">Seek −10s</span></div>
+      <div class="shortcut-item"><span class="shortcut-key">âˆ’</span><span class="shortcut-desc">Volume down</span></div>
+      <div class="shortcut-item"><span class="shortcut-key">,</span><span class="shortcut-desc">Seek âˆ’10s</span></div>
       <div class="shortcut-item"><span class="shortcut-key">.</span><span class="shortcut-desc">Seek +10s</span></div>
-      <div class="shortcut-item"><span class="shortcut-key">←</span><span class="shortcut-desc">Seek −10s</span></div>
-      <div class="shortcut-item"><span class="shortcut-key">→</span><span class="shortcut-desc">Seek +10s</span></div>
-      <div class="shortcut-item"><span class="shortcut-key">↑</span><span class="shortcut-desc">Volume up</span></div>
-      <div class="shortcut-item"><span class="shortcut-key">↓</span><span class="shortcut-desc">Volume down</span></div>
+      <div class="shortcut-item"><span class="shortcut-key">â†</span><span class="shortcut-desc">Seek âˆ’10s</span></div>
+      <div class="shortcut-item"><span class="shortcut-key">â†’</span><span class="shortcut-desc">Seek +10s</span></div>
+      <div class="shortcut-item"><span class="shortcut-key">â†‘</span><span class="shortcut-desc">Volume up</span></div>
+      <div class="shortcut-item"><span class="shortcut-key">â†“</span><span class="shortcut-desc">Volume down</span></div>
       <div class="shortcut-item"><span class="shortcut-key">s</span><span class="shortcut-desc">Shuffle</span></div>
       <div class="shortcut-item"><span class="shortcut-key">r</span><span class="shortcut-desc">Repeat toggle</span></div>
-      <div class="shortcut-item"><span class="shortcut-key">Ctrl/⌘ K</span><span class="shortcut-desc">Command palette</span></div>
+      <div class="shortcut-item"><span class="shortcut-key">Ctrl/âŒ˜ K</span><span class="shortcut-desc">Command palette</span></div>
       <div class="shortcut-item"><span class="shortcut-key">/</span><span class="shortcut-desc">Focus command bar</span></div>
       <div class="shortcut-item"><span class="shortcut-key">?</span><span class="shortcut-desc">Show / hide shortcuts</span></div>
     </div>
@@ -1603,7 +1603,7 @@
 </div>
 
 <script>
-// ── State ──────────────────────────────────────────────────────────────────
+// â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const state = {
   alive: false,
   connecting: true,
@@ -1659,7 +1659,7 @@ function apiHeaders() {
   };
 }
 
-// ── XSS: Escape HTML ────────────────────────────────────────────────────────
+// â”€â”€ XSS: Escape HTML â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function escapeHtml(str) {
   if (!str || typeof str !== 'string') return '';
   const div = document.createElement('div');
@@ -1667,7 +1667,7 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-// ── API helpers ────────────────────────────────────────────────────────────
+// â”€â”€ API helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function apiState() {
   try {
@@ -1694,13 +1694,13 @@ async function apiCmd(cmdStr) {
     });
     if (!r.ok) {
       const data = await r.json().catch(() => ({msg: 'Command failed'}));
-      showToast('❌ ' + (data.msg || 'Command failed'));
+      showToast('âŒ ' + (data.msg || 'Command failed'));
       return false;
     }
     return true;
   } catch (err) {
     console.error('API cmd error:', err);
-    showToast('❌ Connection error');
+    showToast('âŒ Connection error');
     return false;
   } finally {
     setCommandPending(false);
@@ -1718,13 +1718,13 @@ async function apiPlay(query) {
     });
     if (!r.ok) {
       const data = await r.json().catch(() => ({msg: 'Play failed'}));
-      showToast('❌ ' + (data.msg || 'Play failed'));
+      showToast('âŒ ' + (data.msg || 'Play failed'));
       return false;
     }
     return true;
   } catch (err) {
     console.error('API play error:', err);
-    showToast('❌ Connection error');
+    showToast('âŒ Connection error');
     return false;
   } finally {
     setCommandPending(false);
@@ -1788,7 +1788,7 @@ async function submitPin() {
   }
 }
 
-// ── SSE + Polling ───────────────────────────────────────────────────────────
+// â”€â”€ SSE + Polling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 let sse = null;
 let pollInterval = null;
@@ -1893,7 +1893,7 @@ setTimeout(() => {
   }
 }, 2000);
 
-// ── UI Update ──────────────────────────────────────────────────────────────
+// â”€â”€ UI Update â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function updateNowPlaying() {
   const {title, pos, dur, paused, volume, speed, queue, currentIdx, alive, connecting, bufferPct} = state;
@@ -1902,20 +1902,20 @@ function updateNowPlaying() {
   
   // Update browser tab title with now playing
   if (title && title !== 'nothing playing') {
-    document.title = `♪ ${title} — mox`;
+    document.title = `â™ª ${title} â€” mox`;
   } else {
-    document.title = 'mox — music';
+    document.title = 'mox â€” music';
   }
   
   const metaEl = document.getElementById('track-meta');
   if (connecting && !alive) {
-    metaEl.textContent = '— connecting… —';
+    metaEl.textContent = 'â€” connectingâ€¦ â€”';
   } else if (!alive) {
-    metaEl.textContent = '— daemon offline —';
+    metaEl.textContent = 'â€” daemon offline â€”';
   } else if (paused) {
-    metaEl.textContent = (title && title !== 'nothing playing') ? '⏸ paused' : '— idle —';
+    metaEl.textContent = (title && title !== 'nothing playing') ? 'â¸ paused' : 'â€” idle â€”';
   } else {
-    metaEl.textContent = '▶ playing';
+    metaEl.textContent = 'â–¶ playing';
   }
 
   const pct = dur > 0 ? (pos / dur * 100) : 0;
@@ -1923,10 +1923,10 @@ function updateNowPlaying() {
   document.getElementById('progress-buffer').style.width = (bufferPct || 0) + '%';
   document.getElementById('time-pos').textContent = fmtTime(pos);
   document.getElementById('time-dur').textContent = fmtTime(dur);
-  document.getElementById('play-btn').textContent = paused ? '▶' : '⏸';
+  document.getElementById('play-btn').textContent = paused ? 'â–¶' : 'â¸';
   document.getElementById('bottom-title').textContent = title || 'nothing playing';
   document.getElementById('bottom-meta').textContent = alive ? (paused ? 'paused' : 'playing') : 'offline';
-  document.getElementById('bottom-play-btn').textContent = paused ? '▶' : '⏸';
+  document.getElementById('bottom-play-btn').textContent = paused ? 'â–¶' : 'â¸';
   document.getElementById('bottom-progress-fill').style.width = pct + '%';
   document.getElementById('bottom-progress-buffer').style.width = (bufferPct || 0) + '%';
   document.getElementById('bottom-time-pos').textContent = fmtTime(pos);
@@ -1948,14 +1948,14 @@ function updateNowPlaying() {
   document.getElementById('stat-speed').textContent = speed.toFixed(1) + 'x';
   updateSpeedButtons(speed);
   document.getElementById('stat-pos').textContent = fmtTime(pos);
-  document.getElementById('stat-pct').textContent = dur > 0 ? Math.round(pct) + '%' : '—';
+  document.getElementById('stat-pct').textContent = dur > 0 ? Math.round(pct) + '%' : 'â€”';
 
   const dot = document.getElementById('status-dot');
   const statusLabel = document.getElementById('daemon-status');
   dot.classList.remove('connecting', 'offline');
   if (connecting && !alive) {
     dot.classList.add('connecting');
-    statusLabel.textContent = 'connecting…';
+    statusLabel.textContent = 'connectingâ€¦';
   } else if (!alive) {
     dot.classList.add('offline');
     statusLabel.textContent = 'offline';
@@ -1989,7 +1989,7 @@ function updateQueue() {
   const filter = (filterEl?.value || '').trim().toLowerCase();
   if (!queue.length) {
     queueRowsCache = [];
-    el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:20px 0;text-align:center;"><div style="font-size:22px;margin-bottom:8px;">♪</div><div>No tracks in queue.</div><button class="eq-btn" style="margin-top:10px" onclick="document.getElementById(\'search-input\').focus()">search</button></div>';
+    el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:20px 0;text-align:center;"><div style="font-size:22px;margin-bottom:8px;">â™ª</div><div>No tracks in queue.</div><button class="eq-btn" style="margin-top:10px" onclick="document.getElementById(\'search-input\').focus()">search</button></div>';
     return;
   }
   queueRowsCache = queue
@@ -2059,14 +2059,14 @@ function updateLyrics() {
 
   if (!lyrics || typeof lyrics === 'string' || !lyrics.lines || !lyrics.lines.length) {
     if (!state.title || state.title === 'nothing playing') {
-      el.innerHTML = '<div class="lyric-line active">♪ no lyrics loaded</div><div class="lyric-line">play a song to see lyrics</div>';
+      el.innerHTML = '<div class="lyric-line active">â™ª no lyrics loaded</div><div class="lyric-line">play a song to see lyrics</div>';
     } else if (lyrics === 'loading') {
-      el.innerHTML = '<div class="lyric-line active">♪ fetching lyrics…</div>';
+      el.innerHTML = '<div class="lyric-line active">â™ª fetching lyricsâ€¦</div>';
       scheduleLyricsRefresh();
     } else if (lyrics === 'not_found') {
-      el.innerHTML = '<div class="lyric-line active">♪ no lyrics found</div><div class="lyric-line">try: mox lyrics</div>';
+      el.innerHTML = '<div class="lyric-line active">â™ª no lyrics found</div><div class="lyric-line">try: mox lyrics</div>';
     } else {
-      el.innerHTML = '<div class="lyric-line active">♪ fetching lyrics…</div>';
+      el.innerHTML = '<div class="lyric-line active">â™ª fetching lyricsâ€¦</div>';
     }
     return;
   }
@@ -2084,7 +2084,7 @@ function updateLyrics() {
       ? (i === cur ? 'active' : (i < cur ? 'past' : ''))
       : '';
     const onclick = lyrics.synced ? `onclick="seekToLyric(${line.t})"` : '';
-    const text = escapeHtml(line.text || '♪');
+    const text = escapeHtml(line.text || 'â™ª');
     return `<div class="lyric-line ${cls}" ${onclick}>${text}</div>`;
   }).join('');
 
@@ -2094,12 +2094,12 @@ function updateLyrics() {
   }
 }
 
-// ── Commands ───────────────────────────────────────────────────────────────
+// â”€â”€ Commands â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function cmd(command) {
   const success = await apiCmd(command);
   if (success) {
-    showToast('→ ' + command);
+    showToast('â†’ ' + command);
   }
 }
 
@@ -2121,7 +2121,7 @@ async function setVolume(val) {
   volDebounceTimer = setTimeout(async () => {
     const success = await apiCmd('vol ' + v);
     if (success) {
-      showToast('🔊 volume: ' + v + '%');
+      showToast('ðŸ”Š volume: ' + v + '%');
     }
   }, 150);
 }
@@ -2157,11 +2157,11 @@ async function setEq(preset) {
   localStorage.setItem('mox-eq-preset', preset);
   const success = await apiCmd('eq ' + preset);
   if (success) {
-    showToast('🎚 eq: ' + preset);
+    showToast('ðŸŽš eq: ' + preset);
   }
 }
 
-// ── Schedule / Alarm UI ──────────────────────────────────────────────────────
+// â”€â”€ Schedule / Alarm UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const _schedules = JSON.parse(localStorage.getItem('mox-schedules') || '[]');
 let _sleepTimerHandle = null;
 let _sleepTimerEnd = 0;
@@ -2183,7 +2183,7 @@ function _scheduleTimeouts() {
 async function _fireSchedule(id) {
   const s = _schedules.find(s => s.id === id);
   if (!s) return;
-  showToast(`⏰ Schedule: playing "${s.query}"`, 'info');
+  showToast(`â° Schedule: playing "${s.query}"`, 'info');
   await apiPlay(s.query);
   if (s.repeat) {
     // Re-arm for next day
@@ -2205,8 +2205,8 @@ function addSchedule() {
   const repeat  = document.getElementById('sched-repeat')?.checked;
   const fade    = document.getElementById('sched-fade')?.checked;
 
-  if (!timeEl?.value) { showToast('⏰ pick a time first', 'error'); return; }
-  if (!queryEl?.value.trim()) { showToast('⏰ enter a song or URL', 'error'); return; }
+  if (!timeEl?.value) { showToast('â° pick a time first', 'error'); return; }
+  if (!queryEl?.value.trim()) { showToast('â° enter a song or URL', 'error'); return; }
 
   const [h, m] = timeEl.value.split(':').map(Number);
   const now = new Date();
@@ -2225,7 +2225,7 @@ function addSchedule() {
   _schedules.push(entry);
   _saveSchedules();
 
-  const msg = `⏰ scheduled "${entry.query}" at ${entry.time}${repeat ? ' (daily)' : ''}`;
+  const msg = `â° scheduled "${entry.query}" at ${entry.time}${repeat ? ' (daily)' : ''}`;
   showToast(msg, 'success');
   queryEl.value = '';
   loadSchedules();
@@ -2237,7 +2237,7 @@ function cancelSchedule(id) {
   clearTimeout(_schedules[idx]._handle);
   _schedules.splice(idx, 1);
   _saveSchedules();
-  showToast('⏰ schedule cancelled', 'info');
+  showToast('â° schedule cancelled', 'info');
   loadSchedules();
 }
 
@@ -2258,9 +2258,9 @@ function loadSchedules() {
                   margin-bottom:6px;font-size:12px;">
         <div>
           <div style="color:var(--text);margin-bottom:2px;">${s.query}</div>
-          <div style="color:var(--muted);">⏰ ${timeStr} · ${dateStr}${s.repeat ? ' · daily' : ''}</div>
+          <div style="color:var(--muted);">â° ${timeStr} Â· ${dateStr}${s.repeat ? ' Â· daily' : ''}</div>
         </div>
-        <button class="eq-btn" onclick="cancelSchedule(${s.id})" style="color:#ff5a5a;padding:4px 8px;font-size:11px;">✕</button>
+        <button class="eq-btn" onclick="cancelSchedule(${s.id})" style="color:#ff5a5a;padding:4px 8px;font-size:11px;">âœ•</button>
       </div>`;
   }).join('');
 }
@@ -2276,32 +2276,32 @@ async function setSleepTimer(minutes) {
     // Cancel: also tell server
     await apiCmd('sleep cancel');
     if (status) status.textContent = 'sleep timer cancelled';
-    showToast('⏰ sleep timer cancelled', 'info');
+    showToast('â° sleep timer cancelled', 'info');
     return;
   }
   const ms = minutes * 60 * 1000;
   _sleepTimerEnd = Date.now() + ms;
   _sleepTimerHandle = setTimeout(async () => {
     await apiCmd('pause');
-    showToast(`😴 sleep timer: paused after ${minutes}m`, 'info');
-    if (status) status.textContent = 'sleep triggered — paused';
+    showToast(`ðŸ˜´ sleep timer: paused after ${minutes}m`, 'info');
+    if (status) status.textContent = 'sleep triggered â€” paused';
     _sleepTimerHandle = null;
     _sleepTimerEnd = 0;
   }, ms);
   // Also tell the server-side mox sleep command
   await apiCmd('sleep ' + minutes);
-  if (status) status.textContent = `😴 sleep in ${minutes}m`;
-  showToast(`😴 sleep timer: ${minutes} minutes`, 'success');
+  if (status) status.textContent = `ðŸ˜´ sleep in ${minutes}m`;
+  showToast(`ðŸ˜´ sleep timer: ${minutes} minutes`, 'success');
   // Live countdown
   const tick = setInterval(() => {
     if (!_sleepTimerEnd) { clearInterval(tick); return; }
     const remaining = Math.max(0, Math.round((_sleepTimerEnd - Date.now()) / 60000));
-    if (status && _sleepTimerHandle) status.textContent = `😴 sleep in ${remaining}m`;
+    if (status && _sleepTimerHandle) status.textContent = `ðŸ˜´ sleep in ${remaining}m`;
     if (!_sleepTimerHandle) clearInterval(tick);
   }, 30000);
 }
 
-// EQ preset → band gains (dB, 7 bands: 60 170 310 600 1k 3k 6k)
+// EQ preset â†’ band gains (dB, 7 bands: 60 170 310 600 1k 3k 6k)
 const EQ_PRESETS = {
   flat:   [ 0,  0,  0,  0,  0,  0,  0],
   bass:   [+8, +6, +4,  0, -2, -2, -2],
@@ -2368,8 +2368,8 @@ async function applyCustomEq() {
   ).join(',');
   const success = await apiCmd('eq-custom ' + chain);
   if (success) {
-    showToast('🎚 custom EQ applied', 'success');
-    // Deactivate all presets — custom mode active
+    showToast('ðŸŽš custom EQ applied', 'success');
+    // Deactivate all presets â€” custom mode active
     document.querySelectorAll('[id^="eq-"]').forEach(b => b.classList.remove('active'));
     localStorage.setItem('mox-eq-custom', JSON.stringify(gains));
     localStorage.removeItem('mox-eq-preset');
@@ -2377,17 +2377,17 @@ async function applyCustomEq() {
 }
 
 async function quickPlay(query) {
-  showToast('🔍 searching: ' + query);
+  showToast('ðŸ” searching: ' + query);
   const success = await apiPlay(query);
   if (success) {
-    showToast('🎵 playing: ' + query);
+    showToast('ðŸŽµ playing: ' + query);
   }
 }
 
 async function playQueueItem(idx) {
   const success = await apiCmd('playlist-play-index ' + idx);
   if (success) {
-    showToast('▶ track ' + (idx + 1));
+    showToast('â–¶ track ' + (idx + 1));
   }
 }
 
@@ -2401,7 +2401,7 @@ async function removeQueueItem(idx) {
   updateQueue();
   const success = await apiCmd('qrm ' + (idx + 1));  // qrm uses 1-based position
   if (success) {
-    showToast('🗑 removed from queue');
+    showToast('ðŸ—‘ removed from queue');
   } else {
     state.queue = previousQueue;
     updateQueue();
@@ -2462,24 +2462,24 @@ async function seekClick(event) {
   const target = Math.round(pct * state.dur);
   const success = await apiCmd('seek ' + target);
   if (success) {
-    showToast('⏩ ' + fmtTime(target));
+    showToast('â© ' + fmtTime(target));
   }
 }
 
 async function seekToLyric(t) {
   const success = await apiCmd('seek ' + t);
   if (success) {
-    showToast('⏩ ' + fmtTime(t));
+    showToast('â© ' + fmtTime(t));
   }
 }
 
-// ── Dark/Light theme ───────────────────────────────────────────────────────
+// â”€â”€ Dark/Light theme â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function initTheme() {
   const saved = localStorage.getItem('m-ui-theme') || 'dark';
   document.documentElement.setAttribute('data-theme', saved);
   const btn = document.getElementById('theme-toggle');
-  btn.textContent = saved === 'dark' ? '🌙' : '☀';
+  btn.textContent = saved === 'dark' ? 'ðŸŒ™' : 'â˜€';
 }
 
 function toggleTheme() {
@@ -2487,10 +2487,10 @@ function toggleTheme() {
   const next = current === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
   localStorage.setItem('m-ui-theme', next);
-  document.getElementById('theme-toggle').textContent = next === 'dark' ? '🌙' : '☀';
+  document.getElementById('theme-toggle').textContent = next === 'dark' ? 'ðŸŒ™' : 'â˜€';
 }
 
-// ── Shortcut overlay ────────────────────────────────────────────────────────
+// â”€â”€ Shortcut overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function toggleSidebar(force) {
   document.body.classList.toggle('sidebar-open', force ?? !document.body.classList.contains('sidebar-open'));
@@ -2502,13 +2502,13 @@ function toggleShortcutOverlay(e) {
   el.classList.toggle('show');
 }
 
-// ── Lyrics panel toggle ──────────────────────────────────────────────────────
+// â”€â”€ Lyrics panel toggle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function toggleLyricsPanel() {
   showTab('lyrics');
 }
 
-// ── Command history ────────────────────────────────────────────────────────
+// â”€â”€ Command history â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const cmdHistory = [];
 let cmdHistoryIdx = 0;
 
@@ -2596,7 +2596,7 @@ async function handleCmd(e) {
     } else if (knownCmds.has(first)) {
       await cmd(val);
     } else {
-      showToast('🔍 searching: ' + val, 'info');
+      showToast('ðŸ” searching: ' + val, 'info');
       await apiPlay(val);
     }
   }
@@ -2619,7 +2619,7 @@ async function handleCmd(e) {
   }
 }
 
-// ── Live search suggestions (debounced) ──────────────────────────────────────
+// â”€â”€ Live search suggestions (debounced) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _liveSuggestTimer = null;
 let _liveSuggestAbort = null;
 
@@ -2656,7 +2656,7 @@ function liveSuggest(value) {
       const data = await r.json().catch(() => ({ ok: false, results: [] }));
       _liveSuggestAbort = null;
       if (!data.ok || !data.results.length) {
-        box.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">No suggestions — press search for full results.</div>';
+        box.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">No suggestions â€” press search for full results.</div>';
         return;
       }
       // Store in uiStore so playSearchResult/queueSearchResult still work
@@ -2668,7 +2668,7 @@ function liveSuggest(value) {
             <small>${escapeHtml(item.duration || '')}</small>
           </div>
           <div style="display:flex;gap:6px;">
-            <button class="eq-btn" onclick="playSearchResult(${idx})" style="font-size:11px;padding:3px 8px;">▶ play</button>
+            <button class="eq-btn" onclick="playSearchResult(${idx})" style="font-size:11px;padding:3px 8px;">â–¶ play</button>
             <button class="eq-btn" onclick="queueSearchResult(${idx})" style="font-size:11px;padding:3px 8px;">+ queue</button>
           </div>
         </div>
@@ -2678,7 +2678,7 @@ function liveSuggest(value) {
         </div>`;
     } catch (err) {
       if (err.name !== 'AbortError') {
-        box.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">Suggestion error — press search.</div>';
+        box.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">Suggestion error â€” press search.</div>';
       }
     }
   }, 400);
@@ -2867,8 +2867,8 @@ function scheduleLyricsRefresh() {
   }, 1000);
 }
 
-// ── Visualizer (volume-reactive, no broken AudioContext source) ──────────────
-// mpv resolves YouTube URLs via yt-dlp — the browser can't play them directly.
+// â”€â”€ Visualizer (volume-reactive, no broken AudioContext source) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// mpv resolves YouTube URLs via yt-dlp â€” the browser can't play them directly.
 // Instead we drive bar heights with multi-frequency sine oscillators modulated
 // by the current volume level, giving a convincing reactive animation that
 // responds to pause/play and volume changes with zero broken Audio() elements.
@@ -2877,7 +2877,7 @@ const visualizer = {
   lastFrame: 0,
 };
 
-// Seed frequencies — chosen to look natural, not perfectly periodic
+// Seed frequencies â€” chosen to look natural, not perfectly periodic
 const VIZ_FREQS = [1.1, 0.9, 1.4, 0.7, 1.7, 1.2, 0.85, 1.55, 0.95, 1.3, 0.75, 1.6, 1.05, 0.8, 1.45, 1.0];
 const VIZ_PHASES = VIZ_FREQS.map((_, i) => i * 0.63);
 
@@ -2900,7 +2900,7 @@ function drawVisualizer(ts = 0) {
   for (let i = 0; i < bars; i++) {
     let value;
     if (state.paused || !state.playing) {
-      // Flat idle breath — very subtle
+      // Flat idle breath â€” very subtle
       value = 0.04 + Math.abs(Math.sin(t * 0.4 + VIZ_PHASES[i])) * 0.06;
     } else {
       // Multi-harmonic oscillator scaled by volume
@@ -2938,7 +2938,7 @@ function showToast(msg, type = 'success') {
   }, 3000);
 }
 
-// ── Keyboard shortcuts ─────────────────────────────────────────────────────
+// â”€â”€ Keyboard shortcuts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 document.addEventListener('keydown', (e) => {
   const isInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -2974,7 +2974,7 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// ── Smart Queue ─────────────────────────────────────────────────────────────────
+// â”€â”€ Smart Queue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const smartQueue = {
   enabled: JSON.parse(localStorage.getItem('mox-smartq') || 'false'),
   busy: false,         // prevent concurrent fetch loops
@@ -2989,8 +2989,8 @@ function toggleSmartQueue() {
   localStorage.setItem('mox-smartq', JSON.stringify(smartQueue.enabled));
   _updateSmartQueueUI();
   showToast(smartQueue.enabled
-    ? '✨ Smart Queue enabled — will auto-append related tracks'
-    : '⏹ Smart Queue disabled',
+    ? 'âœ¨ Smart Queue enabled â€” will auto-append related tracks'
+    : 'â¹ Smart Queue disabled',
     'info');
 }
 
@@ -3001,11 +3001,11 @@ function _updateSmartQueueUI() {
   if (smartQueue.enabled) {
     btn.style.background = 'var(--accent)';
     btn.style.color = '#0a0a0b';
-    status.textContent = 'on — watching queue…';
+    status.textContent = 'on â€” watching queueâ€¦';
   } else {
     btn.style.background = '';
     btn.style.color = '';
-    status.textContent = 'off — auto-appends related tracks';
+    status.textContent = 'off â€” auto-appends related tracks';
   }
 }
 
@@ -3042,7 +3042,7 @@ async function _smartQueueCheck(st) {
     }
 
     smartQueue.lastAppended = Date.now();
-    showToast(`✨ Smart Queue: added ${data.results.length} related tracks`, 'success');
+    showToast(`âœ¨ Smart Queue: added ${data.results.length} related tracks`, 'success');
   } catch (err) {
     console.warn('[smartq] error:', err);
   } finally {
@@ -3053,7 +3053,7 @@ async function _smartQueueCheck(st) {
 // Initialise Smart Queue UI on load
 _updateSmartQueueUI();
 
-// ── Shareable links ─────────────────────────────────────────────────────────────
+// â”€â”€ Shareable links â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function shareLink() {
   // Encode current track + queue position into URL hash
   const track = state.queue[state.currentIdx];
@@ -3092,7 +3092,7 @@ function _fallbackCopyText(text) {
     document.execCommand('copy');
     showToast('\uD83D\uDD17 Link copied!', 'success');
   } catch (e) {
-    showToast('Copy manually: ' + text.slice(0, 60) + '…', 'info');
+    showToast('Copy manually: ' + text.slice(0, 60) + 'â€¦', 'info');
   }
   document.body.removeChild(ta);
 }
@@ -3119,7 +3119,7 @@ function readShareLink() {
   }
 }
 
-// ── Init ───────────────────────────────────────────────────────────────────
+// â”€â”€ Init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 initTheme();
 document.getElementById('theme-toggle').onclick = toggleTheme;
 applyEqPreset(localStorage.getItem('mox-eq-preset') || 'flat');
@@ -3130,10 +3130,10 @@ if (lyricsVisible === 'false') {
   document.getElementById('panel-lyrics').classList.add('hidden');
 }
 
-showToast('🎵 connecting to mox daemon… press ? for shortcuts', 'info');
+showToast('ðŸŽµ connecting to mox daemonâ€¦ press ? for shortcuts', 'info');
 readShareLink();  // auto-play from URL hash if present
 
-// ── EQ slider init ───────────────────────────────────────────────────────────
+// â”€â”€ EQ slider init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 initEqSliders();
 // Restore custom EQ if saved
 const _savedCustomEq = localStorage.getItem('mox-eq-custom');
@@ -3144,11 +3144,11 @@ if (_savedCustomEq) {
   } catch(e) {}
 }
 
-// ── Schedule init ────────────────────────────────────────────────────────────
+// â”€â”€ Schedule init â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 _scheduleTimeouts();
 loadSchedules();
 
-// ── Plugin manifest JS ───────────────────────────────────────────────────────
+// â”€â”€ Plugin manifest JS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function loadPlugins() {
   const list = document.getElementById('plugin-list');
   if (!list) return;
@@ -3163,7 +3163,7 @@ async function loadPlugins() {
     if (data.plugins.length === 0) {
       list.innerHTML = `
         <div style="text-align:center;padding:20px;color:var(--muted);">
-          <div style="font-size:28px;margin-bottom:8px;">🧩</div>
+          <div style="font-size:28px;margin-bottom:8px;">ðŸ§©</div>
           <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;">no plugins installed</div>
           <div style="font-size:12px;">drop .zsh files into ~/music_system/plugins/</div>
         </div>`;
@@ -3172,7 +3172,7 @@ async function loadPlugins() {
     list.innerHTML = data.plugins.map(p => `
       <div style="background:var(--surface2);border-radius:10px;padding:12px 14px;margin-bottom:8px;border:1px solid var(--border);">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px;">
-          <div style="font-size:13px;font-weight:600;color:var(--text);">🧩 ${_esc(p.name)}</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);">ðŸ§© ${_esc(p.name)}</div>
           ${p.version ? `<span style="font-size:10px;background:var(--accent-dim,#1a1f2e);color:var(--accent);padding:2px 7px;border-radius:10px;">v${_esc(p.version)}</span>` : ''}
         </div>
         ${p.description ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">${_esc(p.description)}</div>` : ''}
@@ -3181,7 +3181,7 @@ async function loadPlugins() {
           <div style="display:flex;gap:4px;flex-wrap:wrap;">
             ${p.commands.map(c => `<code style="font-size:10px;background:var(--surface);padding:2px 6px;border-radius:4px;color:var(--accent);">mox ${_esc(c.replace(/^do_/,''))}</code>`).join('')}
           </div>` : ''}
-        <div style="font-size:10px;color:var(--muted);margin-top:6px;">${_esc(p.file)} · ${(p.size/1024).toFixed(1)}KB</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:6px;">${_esc(p.file)} Â· ${(p.size/1024).toFixed(1)}KB</div>
       </div>`).join('');
   } catch(e) {
     list.innerHTML = '<div style="color:#ff5a5a;font-size:12px;">network error loading plugins</div>';
@@ -3192,20 +3192,20 @@ function _esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── Service worker registration ───────────────────────────────────────────────
+// â”€â”€ Service worker registration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js', { scope: '/' })
     .then(reg => {
       reg.addEventListener('updatefound', () => {
-        showToast('🔄 mox update ready — refresh to apply', 'info');
+        showToast('ðŸ”„ mox update ready â€” refresh to apply', 'info');
       });
     })
     .catch(err => console.warn('[sw] registration failed:', err));
 }
 
 // Online/offline status toasts
-window.addEventListener('offline', () => showToast('📶 You are offline — playback controls may not respond', 'error'));
-window.addEventListener('online',  () => showToast('✅ Back online', 'success'));
+window.addEventListener('offline', () => showToast('ðŸ“¶ You are offline â€” playback controls may not respond', 'error'));
+window.addEventListener('online',  () => showToast('âœ… Back online', 'success'));
 
 drawVisualizer();
 </script>

@@ -13,7 +13,7 @@
  * Note: API routes (/api/*, /sw.js itself) are always network-only.
  */
 
-const CACHE_NAME = 'mox-v1';
+const CACHE_NAME = 'mox-v2';
 
 const PRECACHE_URLS = [
   '/',
