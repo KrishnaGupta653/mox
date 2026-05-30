@@ -71,6 +71,7 @@ NORM_STATE_FILE="$DATA_DIR/norm_enabled"
 TXT_PROGRESS_FILE="$DATA_DIR/txt_progress"
 SHARE_DIR="$DATA_DIR/shares"
 SCHEDULE_DIR="$DATA_DIR/schedules"
+UXI_PID_FILE="$DATA_DIR/uxi_server.pid"
 TXT_LINES=()
 CONFIG_FILE="$MUSIC_ROOT/config"
 PLUGINS_DIR="$MUSIC_ROOT/plugins"
@@ -98,11 +99,12 @@ BAR_REFRESH_MS=500         # progress bar refresh interval
 M_UPDATE_URL=""            # self-update URL (empty=disabled)
 M_UPDATE_SHA256=""         # expected SHA256 for self-update
 UXI_AUTH=0                 # 1 = require web UI PIN on first visit
+UXI_PORT="${UXI_PORT:-7700}"
 
 # ── load user config ──────────────────────────────────────────
 
 # ── Load library modules ────────────────────────────────────────────────────
-_MOX_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib"
+_MOX_LIB_DIR="$(cd "$(dirname "${(%):-%N}")" && pwd)/lib"
 for _mox_lib in core lock ipc search playback queue audio history playlist lyrics schedule ui; do
   # shellcheck source=/dev/null
   source "$_MOX_LIB_DIR/${_mox_lib}.sh" || { echo "Error: failed to load lib/${_mox_lib}.sh" >&2; exit 1; }
