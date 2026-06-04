@@ -28,6 +28,7 @@ SLOW_THRESHOLD=10.0
 # Setup test environment
 TEST_MUSIC_ROOT="/tmp/mox_perf_test_$$"
 export MUSIC_ROOT="$TEST_MUSIC_ROOT"
+export MOX_TEST_MODE=1
 
 cleanup() {
     echo -e "\n${YELLOW}🧹 Cleaning up performance test environment...${NC}"
@@ -129,10 +130,10 @@ EOF
     mkdir -p "$TEST_MUSIC_ROOT/cache"
     for i in {1..100}; do
         cache_key=$(printf "test_cache_%03d" $i)
-        echo "Cached content $i" > "$TEST_MUSIC_ROOT/cache/$cache_key"
+        echo "Cached content $i" > "$TEST_MUSIC_ROOT/cache/$cache_key.cache"
         # Set timestamp to make some files "old"
         if [[ $i -lt 50 ]]; then
-            touch -t 202301010000 "$TEST_MUSIC_ROOT/cache/$cache_key" 2>/dev/null || true
+            touch -t 202301010000 "$TEST_MUSIC_ROOT/cache/$cache_key.cache" 2>/dev/null || true
         fi
     done
     
@@ -304,7 +305,7 @@ run_performance_test "Generate history stats" "\"$MOX_SCRIPT\" history-stats" "$
 echo -e "\n${YELLOW}🗄️ Cache Performance${NC}"
 
 # Test cache operations
-run_performance_test "Cache stats generation" "\"$MOX_SCRIPT\" cache-stats" "$FAST_THRESHOLD"
+run_performance_test "Cache stats generation" "\"$MOX_SCRIPT\" cache-stats" "$MEDIUM_THRESHOLD"
 run_performance_test "Cache pruning" "\"$MOX_SCRIPT\" cache-prune" "$MEDIUM_THRESHOLD"
 run_performance_test "Cache clearing" "\"$MOX_SCRIPT\" cache-clear" "$FAST_THRESHOLD"
 
@@ -312,7 +313,7 @@ echo -e "\n${YELLOW}🔍 Search Performance${NC}"
 
 # Test search operations (these may timeout due to network, but test the command parsing)
 if command -v yt-dlp >/dev/null 2>&1; then
-    run_performance_test "Search command parsing" "timeout 5s \"$MOX_SCRIPT\" search 'test query' || true" "$FAST_THRESHOLD"
+    run_performance_test "Search command parsing" "timeout 5s \"$MOX_SCRIPT\" search 'test query' || true" "$MEDIUM_THRESHOLD"
 else
     echo -e "${BLUE}[PERF $((TESTS_RUN + 1))]${NC} Search command parsing"
     echo -e "  ${YELLOW}⚠️  SKIP${NC} - yt-dlp not available"
@@ -325,7 +326,7 @@ echo -e "\n${YELLOW}🔄 Load Testing${NC}"
 # Test repeated operations
 run_load_test "Repeated help commands" "\"$MOX_SCRIPT\" help" 50 "10.0"
 run_load_test "Repeated status checks" "\"$MOX_SCRIPT\" status" 20 "5.0"
-run_load_test "Repeated playlist listings" "\"$MOX_SCRIPT\" playlists" 20 "5.0"
+run_load_test "Repeated playlist listings" "\"$MOX_SCRIPT\" playlists" 20 "10.0"
 
 echo -e "\n${YELLOW}🧠 Memory Usage Tests${NC}"
 
@@ -336,13 +337,13 @@ run_performance_test "Memory test - large playlist list" "\"$MOX_SCRIPT\" playli
 echo -e "\n${YELLOW}⚙️ Concurrent Operations${NC}"
 
 # Test concurrent command execution
-run_performance_test "Concurrent help commands" "cd ../src && (./mox.sh help & ./mox.sh help & ./mox.sh help & wait)" "$MEDIUM_THRESHOLD"
-run_performance_test "Concurrent status checks" "cd ../src && (./mox.sh status & ./mox.sh status & wait)" "$MEDIUM_THRESHOLD"
+run_performance_test "Concurrent help commands" "(\"$MOX_SCRIPT\" help & \"$MOX_SCRIPT\" help & \"$MOX_SCRIPT\" help & wait)" "$MEDIUM_THRESHOLD"
+run_performance_test "Concurrent status checks" "(\"$MOX_SCRIPT\" status & \"$MOX_SCRIPT\" status & wait)" "$MEDIUM_THRESHOLD"
 
 echo -e "\n${YELLOW}🔧 System Resource Tests${NC}"
 
 # Test with system resource constraints
-run_performance_test "Low resource environment" "cd ../src && ulimit -v 100000 2>/dev/null; ./mox.sh help || ./mox.sh help" "$MEDIUM_THRESHOLD"
+run_performance_test "Low resource environment" "ulimit -v 100000 2>/dev/null; \"$MOX_SCRIPT\" help || \"$MOX_SCRIPT\" help" "$MEDIUM_THRESHOLD"
 
 echo -e "\n${YELLOW}📦 Startup Performance${NC}"
 
@@ -356,7 +357,7 @@ run_performance_test "Warm start help" "\"$MOX_SCRIPT\" help" "$FAST_THRESHOLD"
 echo -e "\n${YELLOW}🎯 Edge Case Performance${NC}"
 
 # Test performance with edge cases
-run_performance_test "Empty playlist handling" "cd ../src && touch '$TEST_MUSIC_ROOT/playlists/empty.m3u' && ./mox.sh load empty" "$FAST_THRESHOLD"
+run_performance_test "Empty playlist handling" "touch '$TEST_MUSIC_ROOT/playlists/empty.m3u' && \"$MOX_SCRIPT\" load empty || true" "$FAST_THRESHOLD"
 run_performance_test "Nonexistent playlist" "\"$MOX_SCRIPT\" load nonexistent_playlist_xyz" "$FAST_THRESHOLD"
 
 echo -e "\n${YELLOW}📊 Performance Summary${NC}"

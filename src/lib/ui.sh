@@ -57,14 +57,14 @@ _clean_url() {
 # ── do_version ──────────────────────────────────────────────────
 do_version() {
   local script_dir version=""
-  
+
   # Get the directory containing this script (compatible with both bash and zsh)
   if [[ -n "${BASH_SOURCE:-}" ]]; then
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   else
     script_dir="$(cd "$(dirname "$0")" && pwd)"
   fi
-  
+
   # Priority 1: Check MOX_PACKAGE_DIR (set by npm wrapper script)
   if [[ -n "$MOX_PACKAGE_DIR" ]]; then
     if [[ -f "$MOX_PACKAGE_DIR/package.json" ]] && command -v jq >/dev/null 2>&1; then
@@ -74,7 +74,7 @@ do_version() {
       version=$(cat "$MOX_PACKAGE_DIR/VERSION" 2>/dev/null | tr -d '\n\r')
     fi
   fi
-  
+
   # Priority 2: Try package.json if we're in a development environment
   if [[ -z "$version" ]]; then
     local package_json_paths=(
@@ -82,7 +82,7 @@ do_version() {
       "$script_dir/../package.json"
       "$script_dir/../../package.json"
     )
-    
+
     for package_file in "${package_json_paths[@]}"; do
       if [[ -f "$package_file" ]] && command -v jq >/dev/null 2>&1; then
         version=$(jq -r '.version // empty' "$package_file" 2>/dev/null)
@@ -90,7 +90,7 @@ do_version() {
       fi
     done
   fi
-  
+
   # Priority 3: Try VERSION file
   if [[ -z "$version" ]]; then
     local version_paths=(
@@ -98,7 +98,7 @@ do_version() {
       "$script_dir/../VERSION"
       "$script_dir/../../VERSION"
     )
-    
+
     for version_file in "${version_paths[@]}"; do
       if [[ -f "$version_file" ]]; then
         version=$(cat "$version_file" 2>/dev/null | tr -d '\n\r')
@@ -106,15 +106,15 @@ do_version() {
       fi
     done
   fi
-  
+
   # Priority 4: Try git tag (development environment)
   if [[ -z "$version" ]] && command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
     version=$(git describe --tags --exact-match 2>/dev/null || git describe --tags 2>/dev/null)
   fi
-  
+
   # Fallback
   [[ -z "$version" ]] && version="unknown"
-  
+
   echo "mox ${version}"
   echo "Terminal music CLI with web UI and extensive features"
   echo "Homepage: https://github.com/KrishnaGupta653/mox"
@@ -194,8 +194,10 @@ do_bar() {
 
     local pos_i dur_i
     pos_i=$(printf '%.0f' "$pos" 2>/dev/null || echo 0)
+    pos_i=$(printf '%s' "${pos_i:-0}" | tr -cd '0-9'); pos_i="${pos_i:-0}"
     dur_i=$(printf '%.0f' "$dur" 2>/dev/null || echo 1)
-    (( dur_i < 1 )) && dur_i=1
+    dur_i=$(printf '%s' "${dur_i:-1}" | tr -cd '0-9'); dur_i="${dur_i:-1}"
+    [[ "$dur_i" -lt 1 ]] 2>/dev/null && dur_i=1
     local speed_fmt vol_i
     printf -v speed_fmt '%.2f' "${speed:-1}" 2>/dev/null || speed_fmt="1.00"
     printf -v vol_i '%.0f' "${vol:-80}" 2>/dev/null || vol_i=80
@@ -206,8 +208,9 @@ do_bar() {
       local cache_end
       cache_end=$(printf '%s' "$cache_state" | "$JQ" -r '."seekable-ranges"[-1].end // empty' 2>/dev/null)
       if [[ -n "$cache_end" ]]; then
-        local cache_i; cache_i=$(printf '%.0f' "$cache_end" 2>/dev/null || echo 0)
-        (( cache_i > dur_i )) && cache_i=$dur_i
+        local cache_i; cache_i=$(printf '%.0f' "$cache_end" 2>/dev/null)
+        cache_i=$(printf '%s' "${cache_i:-0}" | tr -cd '0-9'); cache_i="${cache_i:-0}"
+        [[ "$cache_i" -gt "$dur_i" ]] 2>/dev/null && cache_i=$dur_i
         buf_pct=$(( cache_i * 100 / dur_i ))
       fi
     fi
@@ -267,6 +270,7 @@ do_bar() {
 # ── do_scrub ────────────────────────────────────────────────────
 do_scrub() {
   _need
+  _check_deps
   local title pos dur
   title=$(_get media-title)
   [ -z "$title" ] && { _warn "nothing playing"; return; }
@@ -322,6 +326,10 @@ do_scrub() {
 
 # ── do_status ───────────────────────────────────────────────────
 do_status() {
+  # Ensure required binaries are initialized
+  _ensure_bin SOCAT socat
+  _ensure_bin JQ jq
+
   if [ ! -S "$SOCKET" ]; then
     echo ""
     echo "  ┌─────────────────────────────────────┐"
@@ -536,6 +544,12 @@ do_ui() {
 
 # ── do_uxi ──────────────────────────────────────────────────────
 do_uxi() {
+  # Resolve CURL binary
+  local CURL; CURL=$(command -v curl 2>/dev/null || echo "")
+  [[ -z "$CURL" ]] && CURL="/opt/homebrew/bin/curl"
+  [[ ! -x "$CURL" ]] && CURL="/usr/local/bin/curl"
+  [[ ! -x "$CURL" ]] && { _err "curl not found"; return 1; }
+
   # Get script directory - handle both bash and zsh
   local script_dir
   if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
@@ -543,19 +557,19 @@ do_uxi() {
   else
     script_dir="$(cd "$(dirname "$0")" && pwd)"
   fi
-  
+
   # Locate music_ui_server.py
   local server_path=""
   local candidates=(
     "$script_dir/music_ui_server.py"
     "$MUSIC_ROOT/music_ui_server.py"
   )
-  
+
   # If MOX_PACKAGE_DIR is set (from wrapper), use that for npm/package installations
   if [[ -n "${MOX_PACKAGE_DIR:-}" ]]; then
     candidates=("$MOX_PACKAGE_DIR/src/music_ui_server.py" "${candidates[@]}")
   fi
-  
+
   # Handle Homebrew installation path
   if [[ -n "${MOX_LIBEXEC_DIR:-}" ]]; then
     candidates=("$MOX_LIBEXEC_DIR/music_ui_server.py" "${candidates[@]}")
@@ -640,17 +654,55 @@ _open_browser() {
 
 # ── do_uxi_stop ─────────────────────────────────────────────────
 do_uxi_stop() {
+  local killed=0
+  
+  # First, try to stop via PID file
   if [[ -f "$UXI_PID_FILE" ]]; then
     local pid; pid=$(cat "$UXI_PID_FILE" 2>/dev/null)
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-      kill "$pid" 2>/dev/null
-      _ok "uxi server stopped (pid $pid)"
-    else
-      _info "uxi server not running"
+      kill "$pid" 2>/dev/null && killed=$((killed + 1))
     fi
     rm -f "$UXI_PID_FILE"
+  fi
+  
+  # Kill all Python processes on ports 7700-7799 (mox uxi ports)
+  if [[ "$OS" == "mac" ]]; then
+    # macOS: use lsof to find all processes on 770* ports at once
+    while IFS= read -r pid; do
+      [[ -z "$pid" ]] && continue
+      # Check if it's a Python process or has music_ui_server in command line
+      local proc_info
+      proc_info=$(ps -p "$pid" -o comm=,args= 2>/dev/null)
+      if [[ -n "$proc_info" ]] && echo "$proc_info" | grep -q -iE '(python|music_ui_server)'; then
+        kill -9 "$pid" 2>/dev/null && killed=$((killed + 1))
+      fi
+    done < <(lsof -ti :7700-7799 2>/dev/null)
   else
-    _info "uxi server not running"
+    # Linux: use ss or netstat
+    if command -v ss >/dev/null 2>&1; then
+      # Use ss (modern Linux)
+      while IFS= read -r pid; do
+        [[ -z "$pid" ]] && continue
+        local proc_info
+        proc_info=$(ps -p "$pid" -o comm=,args= 2>/dev/null)
+        if [[ -n "$proc_info" ]] && echo "$proc_info" | grep -q -iE '(python|music_ui_server)'; then
+          kill -9 "$pid" 2>/dev/null && killed=$((killed + 1))
+        fi
+      done < <(ss -tlnp 2>/dev/null | awk '/:(770[0-9]{2})\s/ {print $6}' | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u)
+    else
+      # Fallback: find all python processes with port 770* in command line
+      while IFS= read -r pid; do
+        [[ -z "$pid" ]] && continue
+        kill -9 "$pid" 2>/dev/null && killed=$((killed + 1))
+      done < <(ps aux | grep -E '(python|music_ui_server).*770[0-9]{2}' | grep -v grep | awk '{print $2}')
+    fi
+  fi
+  
+  # Report results
+  if [[ $killed -eq 0 ]]; then
+    _info "no uxi servers running on ports 7700-7799"
+  else
+    _ok "stopped $killed uxi server(s) on ports 7700-7799"
   fi
 }
 
@@ -705,8 +757,9 @@ _txt_search_and_play_line() {
   else
     # v5-Z: use _do_search which has proper PIPESTATUS-equivalent error handling
     results=$(_do_search "$query" "$_txt_n") || return 1
-    local valid_count; valid_count=$(echo "$results" | grep -cE 'https?://' 2>/dev/null || echo 0)
-    [[ -n "$results" ]] && (( valid_count >= 1 )) && echo "$results" > "$key"
+    local valid_count; valid_count=$(echo "$results" | grep -cE 'https?://' 2>/dev/null)
+    valid_count=$(printf '%s' "${valid_count:-0}" | tr -cd '0-9'); valid_count="${valid_count:-0}"
+    [[ -n "$results" ]] && [[ "$valid_count" -ge 1 ]] 2>/dev/null && echo "$results" > "$key"
   fi
 
   [ -z "$results" ] && return 1
@@ -727,7 +780,8 @@ _txt_kill_bg_job() {
     rm -f "$bg_pid_file"
   fi
   local cur_gen=0
-  [ -f "$TXT_BG_GEN_FILE" ] && cur_gen=$(cat "$TXT_BG_GEN_FILE" 2>/dev/null || echo 0)
+  [ -f "$TXT_BG_GEN_FILE" ] && cur_gen=$(cat "$TXT_BG_GEN_FILE" 2>/dev/null)
+  cur_gen=$(printf '%s' "${cur_gen:-0}" | tr -cd '0-9'); cur_gen="${cur_gen:-0}"
   echo $(( cur_gen + 1 )) > "$TXT_BG_GEN_FILE"
 }
 
@@ -777,7 +831,7 @@ do_export() {
 
 # ── do_index ────────────────────────────────────────────────────
 do_index() {
-  if [[ -z "$FFPROBE" || ! -x "$FFPROBE" ]]; then
+  if [[ -z "${FFPROBE:-}" || ! -x "${FFPROBE:-}" ]]; then
     _warn "ffprobe not found — install ffmpeg for local library indexing"
     _info "macOS: brew install ffmpeg | Linux: apt install ffmpeg"
     return 1
@@ -885,6 +939,12 @@ do_scan() {
 
 # ── do_doctor ───────────────────────────────────────────────────
 do_doctor() {
+  _check_deps
+  # Also initialize optional deps for doctor output
+  _ensure_bin CURL curl
+  _ensure_bin CHAFA chafa
+  _ensure_bin FFPROBE ffprobe
+
   echo ""
   echo "  ${C}mox doctor — system diagnostics (v7.2.2)${X}"
   echo "  $(date)"
@@ -1020,18 +1080,22 @@ do_log_clear() { > "$MPV_LOG"; _ok "mpv log cleared"; }
 
 # ── do_cache_clear ──────────────────────────────────────────────
 do_cache_clear() {
-  local count; count=$(ls "$CACHE_DIR"/*.cache 2>/dev/null | wc -l | tr -d ' ')
-  rm -f "$CACHE_DIR"/*.cache
+  local -a files
+  files=("$CACHE_DIR"/*.cache(N))
+  local count=${#files[@]}
+  (( count > 0 )) && rm -f "${files[@]}"
   _ok "cleared ${count} cached search(es)"
 }
 
 # ── do_cache_stats ──────────────────────────────────────────────
 do_cache_stats() {
   local total=0 expired=0 fresh=0
-  for f in "$CACHE_DIR"/*.cache; do
-    [ -f "$f" ] || continue
+  local -a files
+  files=("$CACHE_DIR"/*.cache(N))
+  local now; now=$(date +%s)
+  for f in "${files[@]}"; do
     total=$(( total + 1 ))
-    if [ "$(_cache_age "$f")" -ge "$CACHE_TTL" ]; then expired=$(( expired + 1 ))
+    if [ "$(( now - $(_mtime "$f") ))" -ge "$CACHE_TTL" ]; then expired=$(( expired + 1 ))
     else fresh=$(( fresh + 1 )); fi
   done
   echo ""; echo "  ${C}cache stats:${X}"
@@ -1042,10 +1106,11 @@ do_cache_stats() {
 # ── do_cache_prune ──────────────────────────────────────────────
 do_cache_prune() {
   local count=0
-  for f in "$CACHE_DIR"/*.cache; do
-    [ -f "$f" ] || continue
-    [[ -f "$f" ]] || continue
-    if [ "$(_cache_age "$f")" -ge "$CACHE_TTL" ]; then rm -f "$f"; count=$(( count + 1 )); fi
+  local -a files
+  files=("$CACHE_DIR"/*.cache(N))
+  local now; now=$(date +%s)
+  for f in "${files[@]}"; do
+    if [ "$(( now - $(_mtime "$f") ))" -ge "$CACHE_TTL" ]; then rm -f "$f"; count=$(( count + 1 )); fi
   done
   _ok "pruned ${count} expired cache entrie(s)"
 }
@@ -1125,7 +1190,8 @@ do_queue_dedup() {
   _need
   local raw pl_count
   raw=$(_cmd '{"command":["get_property","playlist"]}')
-  pl_count=$(echo "$raw" | "$JQ" '.data|length' 2>/dev/null || echo 0)
+  pl_count=$(echo "$raw" | "$JQ" '.data|length' 2>/dev/null)
+  pl_count=$(printf '%s' "${pl_count:-0}" | tr -cd '0-9'); pl_count="${pl_count:-0}"
   [[ "$pl_count" -eq 0 ]] && { _warn "queue empty"; return; }
   local dup_indices
   dup_indices=$(echo "$raw" | "$JQ" -r '.data[].filename // ""' 2>/dev/null \
@@ -1227,6 +1293,7 @@ do_search_only() {
 
 # ── Phase 2.7: Internet radio ────────────────────────────────────
 do_radio() {
+  _check_deps
   local genre="${1:-}"
   [[ ! -f "$STATIONS_FILE" ]] && { _err "create $STATIONS_FILE (genre\tname\turl per line)"; return 1; }
   [[ ! -s "$STATIONS_FILE" ]] && { _err "stations file empty"; return 1; }
@@ -1252,13 +1319,13 @@ do_radio() {
   local url; url=$(echo "$chosen" | awk -F'\t' '{print $3}')
   [[ -z "$url" ]] && { _err "invalid station line"; return 1; }
   local name; name=$(echo "$chosen" | awk -F'\t' '{print $2}')
-  
+
   # In test mode, just show what would be played without starting daemon
   if [[ -n "${MOX_TEST_MODE:-}" ]]; then
     _ok "📻 ▶  ${name:-unknown}"
     return 0
   fi
-  
+
   _start
   _silent '{"command":["playlist-clear"]}'
   _ipc_loadfile "$url" "replace"
@@ -1268,6 +1335,7 @@ do_radio() {
 # ── Phase 2.9: Chapter navigation ──────────────────────────────
 do_chapter() {
   _need
+  _check_deps
   local path; path=$(_get path)
   [[ -z "$path" ]] && { _err 4 "nothing playing"; return 1; }
   [[ "$path" != *youtube* && "$path" != *youtu.be* ]] && { _warn "chapters only for YouTube videos"; return; }
@@ -1342,6 +1410,7 @@ do_notify_toggle() {
 
 # ── Phase 2.15: History with play counts ─────────────────────────
 do_history_stats() {
+  _check_deps
   [[ ! -s "$HISTORY_FILE" ]] && { _warn "no history yet"; return; }
   local with_counts
   with_counts=$(awk -F'\t' '{count[$3]++; title[$3]=$2; date[$3]=$1} END{for(u in count) print count[u]"\t"date[u]"\t"title[u]"\t"u}' "$HISTORY_FILE" | sort -rn)
@@ -1548,6 +1617,7 @@ EOF
 }
 
 # ── main dispatch ─────────────────────────────────────────────
+if [[ "${MOX_LIB_ONLY:-}" != "1" ]]; then
 if [ $# -eq 0 ]; then
   if [ ! -S "$SOCKET" ]; then
     echo ""
@@ -1697,3 +1767,4 @@ fi
 
 [ $FLAG_HP -eq 1 ] && sleep 0.4 && do_hp
 [ $FLAG_SP -eq 1 ] && sleep 0.4 && do_sp
+fi

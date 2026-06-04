@@ -24,8 +24,10 @@ _autodj_check() {
   [ ! -S "$SOCKET" ] && return
 
   local pl_count
-  pl_count=$(_cmd '{"command":["get_property","playlist"]}' | "$JQ" '.data|length' 2>/dev/null || echo 0)
-  (( pl_count > 2 )) && return  # queue still has tracks, don't refill
+  pl_count=$(_cmd '{"command":["get_property","playlist"]}' | "$JQ" '.data|length' 2>/dev/null)
+  pl_count=$(printf '%s' "${pl_count:-0}" | tr -cd '0-9')
+  pl_count="${pl_count:-0}"
+  [[ "$pl_count" -gt 2 ]] 2>/dev/null && return  # queue still has tracks, don't refill
 
   [ -s "$HISTORY_FILE" ] || return
   local seed_title; seed_title=$(_tac "$HISTORY_FILE" | awk -F'\t' '!seen[$2]++ {print $2; exit}')

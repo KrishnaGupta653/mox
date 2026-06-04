@@ -419,6 +419,65 @@ class TestServerSecurity(unittest.TestCase):
             self.assertFalse(valid, f"Command '{cmd}' should be rejected")
 
 
+class TestUXIFixes(unittest.TestCase):
+    """Regression coverage for UXI audit fixes."""
+
+    def test_url_queries_allow_youtube_parameters(self):
+        from music_ui_server import _validate_query
+
+        valid, err = _validate_query('https://www.youtube.com/watch?v=abc123xyz00&list=PL123')
+        self.assertTrue(valid, err)
+
+    def test_url_queries_reject_injection_metacharacters(self):
+        from music_ui_server import _validate_query
+
+        valid, _ = _validate_query('https://www.youtube.com/watch?v=abc123xyz00;rm -rf /')
+        self.assertFalse(valid)
+
+    def test_media_modes_build_expected_mox_flags(self):
+        from music_ui_server import _mox_args_for_mode
+
+        with patch('music_ui_server._resolve_mox_binary', return_value='/bin/mox'):
+            self.assertEqual(_mox_args_for_mode('song', 'replace'), ['/bin/mox', 'song'])
+            self.assertEqual(_mox_args_for_mode('song', 'add'), ['/bin/mox', 'song', '-a'])
+            self.assertEqual(_mox_args_for_mode('song', 'add-next'), ['/bin/mox', 'song', '-an'])
+
+    def test_run_mox_media_is_nonblocking_and_url_safe(self):
+        from music_ui_server import _run_mox_media
+
+        with patch('music_ui_server._resolve_mox_binary', return_value='/bin/mox'), \
+             patch('music_ui_server.subprocess.Popen') as popen:
+            proc, result = _run_mox_media('https://youtu.be/abc123xyz00?si=test&list=PL123', 'add')
+
+        self.assertTrue(result['ok'])
+        self.assertIsNotNone(proc)
+        popen.assert_called_once()
+        self.assertEqual(popen.call_args.args[0], ['/bin/mox', 'https://youtu.be/abc123xyz00?si=test&list=PL123', '-a'])
+
+    def test_eq_custom_and_sleep_validate(self):
+        from music_ui_server import _validate_cmd
+
+        self.assertTrue(_validate_cmd('eq-custom 60 +4 170 -2')[0])
+        self.assertTrue(_validate_cmd('sleep 30')[0])
+        self.assertTrue(_validate_cmd('sleep cancel')[0])
+        self.assertFalse(_validate_cmd('eq-custom equalizer=f=60:g=4')[0])
+
+    def test_get_likes_reads_reverse_chronological_rows(self):
+        import music_ui_server
+
+        with tempfile.TemporaryDirectory() as tmp:
+            likes_file = os.path.join(tmp, 'likes')
+            with open(likes_file, 'w', encoding='utf-8') as f:
+                f.write('2024-01-01 10:00\tFirst\thttps://example.com/1\n')
+                f.write('2024-01-02 10:00\tSecond\thttps://example.com/2\n')
+
+            with patch.object(music_ui_server, 'LIKES_FILE', likes_file):
+                data = music_ui_server.get_likes()
+
+        self.assertTrue(data['ok'])
+        self.assertEqual([row['title'] for row in data['results']], ['Second', 'First'])
+
+
 def run_api_tests():
     """Run all API tests"""
     # Create test suite
@@ -428,6 +487,7 @@ def run_api_tests():
     # Add test cases
     suite.addTest(loader.loadTestsFromTestCase(TestMoxAPI))
     suite.addTest(loader.loadTestsFromTestCase(TestServerSecurity))
+    suite.addTest(loader.loadTestsFromTestCase(TestUXIFixes))
     
     # Run tests
     runner = unittest.TextTestRunner(verbosity=2)

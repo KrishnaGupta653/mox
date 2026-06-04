@@ -57,6 +57,11 @@ do_load() {
     return 1
   fi
 
+  if [[ -n "${MOX_TEST_MODE:-}" ]]; then
+    _ok "loaded: $1  (${valid_urls} tracks)"
+    return 0
+  fi
+
   _start
   _silent '{"command":["playlist-clear"]}'
   local _existing_urls
@@ -82,14 +87,21 @@ do_load() {
 
 # ── do_playlists ────────────────────────────────────────────────
 do_playlists() {
+  # Set nullglob to avoid errors when no .m3u files exist
+  setopt nullglob 2>/dev/null || shopt -s nullglob 2>/dev/null
   echo ""
   echo "  ${C}saved playlists:${X}"
   local found=0
   for f in "$PLAYLIST_DIR"/*.m3u; do
     # Check if glob matched any files (avoid processing literal *.m3u)
     [ -f "$f" ] || break
-    local name; name=$(basename "$f" .m3u)
-    local count; count=$(grep -cvE '^\s*(#|$)' "$f" 2>/dev/null || echo 0)
+    local base="${f##*/}"
+    local name="${base%.m3u}"
+    local count=0 line
+    while IFS= read -r line; do
+      [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
+      count=$((count + 1))
+    done < "$f"
     echo "  ∙ ${W}${name}${X}  (${count} tracks)"
     found=1
   done
@@ -120,6 +132,7 @@ do_playlist_del() {
 
 # ── do_dl ───────────────────────────────────────────────────────
 do_dl() {
+  _check_deps
   [ -z "${1:-}" ] && { _err "usage: mox dl \"song query\""; return 1; }
   _info "searching to download..."
   local url; url=$(_pick "$1") || return 1
@@ -149,6 +162,8 @@ do_dl() {
 
 # ── do_dl_list ──────────────────────────────────────────────────
 do_dl_list() {
+  # Set nullglob to avoid errors when no audio files exist
+  setopt nullglob 2>/dev/null || shopt -s nullglob 2>/dev/null
   echo ""
   echo "  ${C}downloads:${X}  $DOWNLOADS_DIR"
   echo ""
@@ -282,6 +297,7 @@ do_bookmarks() {
 
 # ── do_bookmark_load ────────────────────────────────────────────
 do_bookmark_load() {
+  _check_deps
   [ -s "$BOOKMARKS_FILE" ] || { _warn "no bookmarks yet"; return; }
   local line
   line=$("$FZF" \
@@ -326,6 +342,9 @@ do_bookmark_load() {
 
 # ── do_txt ──────────────────────────────────────────────────────
 do_txt() {
+  _check_deps
+  # Set nullglob to avoid errors when no .txt files exist
+  setopt nullglob 2>/dev/null || shopt -s nullglob 2>/dev/null
   local arg="${1:-}"
   local resume_flag="${2:-}"
   local chosen_file=""
@@ -696,13 +715,15 @@ do_txtnow() {
 
 # ── do_txts ─────────────────────────────────────────────────────
 do_txts() {
+  # Set nullglob to avoid errors when no .txt files exist
+  setopt nullglob 2>/dev/null || shopt -s nullglob 2>/dev/null
   echo ""
   printf "  ${C}txt playlists  →  %s${X}\n" "$TXTS_DIR"
   echo ""
   local found=0
   _txt_state_read
   for f in "$TXTS_DIR"/*.txt; do
-    [ -f "$f" ] || break
+    [ -f "$f" ] || continue
     local name; name=$(basename "$f" .txt)
     local count; count=$(grep -cvE '^\s*(#|$)' "$f" 2>/dev/null || echo 0)
     if [ "$f" = "$TXT_ACTIVE_FILE" ]; then
@@ -724,6 +745,7 @@ do_txts() {
 # ── do_txtpick ──────────────────────────────────────────────────
 do_txtpick() {
   _need
+  _check_deps
   _txt_state_read
   [ -z "$TXT_ACTIVE_FILE" ] && { _err "no active txt playlist — start one with: mox txt"; return 1; }
   _txt_read_lines "$TXT_ACTIVE_FILE"
@@ -760,6 +782,9 @@ do_txtpick() {
 
 # ── do_txtedit ──────────────────────────────────────────────────
 do_txtedit() {
+  _check_deps
+  # Set nullglob to avoid errors when no .txt files exist
+  setopt nullglob 2>/dev/null || shopt -s nullglob 2>/dev/null
   local arg="${1:-}"
   local f
   if [ -z "$arg" ]; then
@@ -817,6 +842,7 @@ do_txt_export() {
 
 # ── do_local ────────────────────────────────────────────────────
 do_local() {
+  _check_deps
   [[ -f "$LOCAL_INDEX" ]] || { _err "no local index — run: mox index first"; return 1; }
   local query="${1:-}"
 

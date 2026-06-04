@@ -116,8 +116,9 @@ _do_search() {
 
   # API succeeded → cache + emit
   if [[ -n "$results" ]]; then
-    local valid_count; valid_count=$(echo "$results" | grep -cE 'https?://' 2>/dev/null || echo 0)
-    if (( valid_count >= 1 )); then
+    local valid_count; valid_count=$(echo "$results" | grep -cE 'https?://' 2>/dev/null)
+    valid_count=$(printf '%s' "${valid_count:-0}" | tr -cd '0-9'); valid_count="${valid_count:-0}"
+    if [[ "$valid_count" -ge 1 ]] 2>/dev/null; then
       echo "$results" > "$key"
       echo "$results"
       return 0
@@ -143,8 +144,9 @@ _do_search() {
   {
     _search_ytdlp_stream "$query" "$n" | tee "$tmpfile" > "$fifo"
     # After yt-dlp finishes (fifo closed), validate and promote cache
-    local valid; valid=$(grep -cE 'https?://' "$tmpfile" 2>/dev/null || echo 0)
-    if (( valid >= 1 )); then
+    local valid; valid=$(grep -cE 'https?://' "$tmpfile" 2>/dev/null)
+    valid=$(printf '%s' "${valid:-0}" | tr -cd '0-9'); valid="${valid:-0}"
+    if [[ "$valid" -ge 1 ]] 2>/dev/null; then
       mv "$tmpfile" "$key" 2>/dev/null || rm -f "$tmpfile"
     else
       rm -f "$tmpfile"
@@ -247,6 +249,7 @@ _pick() {
 # ── do_similar ──────────────────────────────────────────────────
 do_similar() {
   _need
+  _check_deps
   [ -s "$HISTORY_FILE" ] || { _warn "no history yet — play some tracks first"; return; }
   local seeds; seeds=$(_tac "$HISTORY_FILE" | awk -F'\t' '!seen[$2]++ {print $2}' | head -3)
   [ -z "$seeds" ] && { _warn "not enough history"; return; }

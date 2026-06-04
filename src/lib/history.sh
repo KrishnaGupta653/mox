@@ -57,6 +57,7 @@ do_like() {
 
 # ── do_unlike ───────────────────────────────────────────────────
 do_unlike() {
+  _check_deps
   [ -s "$LIKES_FILE" ] || { _warn "no likes yet"; return; }
   local line
   line=$("$FZF" \
@@ -99,6 +100,7 @@ do_love() {
 # ── do_likes_play ───────────────────────────────────────────────
 do_likes_play() {
   _need
+  _check_deps
   [ -s "$LIKES_FILE" ] || { _warn "no likes yet"; return; }
   local line
   line=$("$FZF" \
@@ -116,6 +118,7 @@ do_likes_play() {
 
 # ── do_history ──────────────────────────────────────────────────
 do_history() {
+  _check_deps
   [ -s "$HISTORY_FILE" ] || { _warn "no history yet"; return; }
   
   # In test mode, just show the history list

@@ -75,7 +75,7 @@ _wait_prop() {
     val=$(_get_checked "$prop")
 
     # v5-D: hard error → stop spinning immediately
-    if [[ "$_GET_ERROR" == "unavailable" ]]; then
+    if [[ "${_GET_ERROR:-}" == "unavailable" ]]; then
       printf '\r\e[2K' >&2
       echo ""
       return 1

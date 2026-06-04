@@ -27,6 +27,7 @@ VERBOSE=${VERBOSE:-0}
 QUICK_MODE=${QUICK_MODE:-0}
 SKIP_SLOW=${SKIP_SLOW:-0}
 PARALLEL=${PARALLEL:-0}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPORT_FILE="test-report-$(date +%Y%m%d-%H%M%S).txt"
 
 # Test suite definitions (compatible with older bash)
@@ -109,6 +110,7 @@ run_test_suite() {
     fi
     
     local script_name=$(echo "$suite_info" | cut -d'|' -f1)
+    local script_path="$SCRIPT_DIR/$script_name"
     local description=$(echo "$suite_info" | cut -d'|' -f2)
     local speed=$(echo "$suite_info" | cut -d'|' -f3)
     
@@ -119,7 +121,7 @@ run_test_suite() {
     fi
     
     # Check if test script exists
-    if [[ ! -f "$script_name" ]]; then
+    if [[ ! -f "$script_path" ]]; then
         log "${RED}❌ Test script not found: $script_name${NC}"
         return 1
     fi
@@ -142,23 +144,25 @@ run_test_suite() {
     fi
     
     # Run the test suite
+    set +e
     if [[ $VERBOSE -eq 1 ]]; then
         if [[ "$script_name" == *.py ]]; then
-            python3 "$script_name" 2>&1 | tee "$output_file"
+            python3 "$script_path" 2>&1 | tee "$output_file"
             exit_code=${PIPESTATUS[0]}
         else
-            bash "$script_name" 2>&1 | tee "$output_file"
+            bash "$script_path" 2>&1 | tee "$output_file"
             exit_code=${PIPESTATUS[0]}
         fi
     else
         if [[ "$script_name" == *.py ]]; then
-            python3 "$script_name" > "$output_file" 2>&1
+            python3 "$script_path" > "$output_file" 2>&1
             exit_code=$?
         else
-            bash "$script_name" > "$output_file" 2>&1
+            bash "$script_path" > "$output_file" 2>&1
             exit_code=$?
         fi
     fi
+    set -e
     
     local end_time=$(date +%s)
     local duration=$((end_time - start_time))
@@ -174,13 +178,14 @@ run_test_suite() {
         tests_failed=$(grep "Tests failed:" "$output_file" | tail -1 | grep -o '[0-9]\+' | head -1)
     elif grep -q "Ran [0-9]* tests" "$output_file"; then
         # Python unittest format
-        tests_run=$(grep "Ran [0-9]* tests" "$output_file" | grep -o '[0-9]\+')
-        if grep -q "OK" "$output_file"; then
+        tests_run=$(grep -Eo "Ran [0-9]+ tests" "$output_file" | tail -1 | grep -o '[0-9]\+' || echo "0")
+        if grep -q "^OK" "$output_file"; then
             tests_passed=$tests_run
             tests_failed=0
         else
-            tests_failed=$(grep -o "failures=[0-9]\+" "$output_file" | grep -o '[0-9]\+' || echo "0")
-            local errors=$(grep -o "errors=[0-9]\+" "$output_file" | grep -o '[0-9]\+' || echo "0")
+            tests_failed=$(grep -Eo "failures=[0-9]+" "$output_file" | tail -1 | grep -o '[0-9]\+' || echo "0")
+            local errors
+            errors=$(grep -Eo "errors=[0-9]+" "$output_file" | tail -1 | grep -o '[0-9]\+' || echo "0")
             tests_failed=$((tests_failed + errors))
             tests_passed=$((tests_run - tests_failed))
         fi

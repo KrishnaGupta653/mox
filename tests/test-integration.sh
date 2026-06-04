@@ -147,7 +147,7 @@ run_test_with_output "Status shows stopped state" "timeout 3s \"$MOX_SCRIPT\" st
 
 # Test 5: Help system
 run_test_with_output "Help command works" "timeout 3s \"$MOX_SCRIPT\" help" "Commands:|PLAY|TRANSPORT"
-run_test_with_output "Help shows version info" "timeout 3s \"$MOX_SCRIPT\" help" "v6"
+run_test_with_output "Help shows version info" "timeout 3s \"$MOX_SCRIPT\" help" "v[0-9]+\\.[0-9]+\\.[0-9]+"
 
 echo -e "\n${YELLOW}🔍 Search and Discovery Tests${NC}"
 

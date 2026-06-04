@@ -7,12 +7,17 @@
 # ── do_play ─────────────────────────────────────────────────────
 do_play() {
   _start
+  _check_deps
   local url
 
   if _is_local_file "${1:-}"; then
     url="$1"
     [[ -f "$url" ]] || { _err "file not found: $url"; return 1; }
     _info "loading local file..."
+  elif [[ "${1:-}" =~ ^https?:// ]]; then
+    # Direct URL - skip interactive picker (needed for UXI)
+    url="$1"
+    _info "loading URL..."
   else
     url=$(_pick "${1:-}") || return 1
   fi
@@ -58,11 +63,15 @@ do_replay() {
 # ── do_add_next ─────────────────────────────────────────────────
 do_add_next() {
   _start
+  _check_deps
   local url
 
   if _is_local_file "${1:-}"; then
     url="$1"
     [[ -f "$url" ]] || { _err "file not found: $url"; return 1; }
+  elif [[ "${1:-}" =~ ^https?:// ]]; then
+    # Direct URL - skip interactive picker (needed for UXI)
+    url="$1"
   else
     url=$(_pick "${1:-}") || return 1
   fi
@@ -71,15 +80,18 @@ do_add_next() {
 
   # Get current playing index (0-based), insert at current+1
   local cur_idx; cur_idx=$(_get playlist-playing-pos)
+  cur_idx=$(printf '%s' "${cur_idx:-0}" | tr -cd '0-9')
   cur_idx="${cur_idx:-0}"
   local insert_pos=$(( cur_idx + 1 ))
 
   _ipc_loadfile "$url" "append"
   # Move newly appended track to insert_pos
   local pl_count
-  pl_count=$(_cmd '{"command":["get_property","playlist"]}' | "$JQ" '.data|length' 2>/dev/null || echo 0)
+  pl_count=$(_cmd '{"command":["get_property","playlist"]}' | "$JQ" '.data|length' 2>/dev/null)
+  pl_count=$(printf '%s' "${pl_count:-0}" | tr -cd '0-9')
+  pl_count="${pl_count:-0}"
   local last_idx=$(( pl_count - 1 ))
-  if (( last_idx > insert_pos )); then
+  if [[ "$last_idx" -gt "$insert_pos" ]] 2>/dev/null; then
     _silent "{\"command\":[\"playlist-move\",${last_idx},${insert_pos}]}"
   fi
   _ok "➕ added to play next (position $((insert_pos + 1)))"
@@ -89,11 +101,15 @@ do_add_next() {
 # ── do_add ──────────────────────────────────────────────────────
 do_add() {
   _start
+  _check_deps
   local url
 
   if _is_local_file "${1:-}"; then
     url="$1"
     [[ -f "$url" ]] || { _err "file not found: $url"; return 1; }
+  elif [[ "${1:-}" =~ ^https?:// ]]; then
+    # Direct URL - skip interactive picker (needed for UXI)
+    url="$1"
   else
     url=$(_pick "${1:-}") || return 1
   fi
@@ -102,8 +118,11 @@ do_add() {
 
   local existing
   existing=$(_cmd '{"command":["get_property","playlist"]}' \
-    | "$JQ" -r '.data[].filename' 2>/dev/null | grep -cF "$url" 2>/dev/null || echo 0)
-  if (( existing > 0 )); then
+    | "$JQ" -r '.data[].filename' 2>/dev/null | grep -cF "$url" 2>/dev/null)
+  # Sanitize: strip non-digits, default to 0 if empty or non-numeric
+  existing=$(printf '%s' "${existing:-0}" | tr -cd '0-9')
+  existing="${existing:-0}"
+  if [[ "$existing" -gt 0 ]] 2>/dev/null; then
     _warn "already in queue — use -f to force add"
     return
   fi
@@ -116,6 +135,7 @@ do_add() {
 # ── do_add_force ────────────────────────────────────────────────
 do_add_force() {
   _start
+  _check_deps
   local url
 
   if _is_local_file "${1:-}"; then
@@ -167,10 +187,14 @@ do_stop() {
 
   # Persist volume/speed before killing
   if [[ -S "$SOCKET" ]]; then
-    local v s
-    v=$(_cmd '{"command":["get_property","volume"]}' 2>/dev/null | "$JQ" -r '.data // empty')
-    s=$(_cmd '{"command":["get_property","speed"]}' 2>/dev/null | "$JQ" -r '.data // empty')
-    [[ -n "$v" && -n "$s" ]] && printf 'volume=%s\nspeed=%s\n' "$v" "$s" > "$VOLUME_SPEED_STATE" 2>/dev/null
+    # Ensure JQ is initialized
+    _ensure_bin JQ jq
+    if [[ -n "$JQ" ]]; then
+      local v s
+      v=$(_cmd '{"command":["get_property","volume"]}' 2>/dev/null | "$JQ" -r '.data // empty')
+      s=$(_cmd '{"command":["get_property","speed"]}' 2>/dev/null | "$JQ" -r '.data // empty')
+      [[ -n "$v" && -n "$s" ]] && printf 'volume=%s\nspeed=%s\n' "$v" "$s" > "$VOLUME_SPEED_STATE" 2>/dev/null
+    fi
   fi
 
   if [[ -f "$MPV_PID_FILE" ]]; then
@@ -299,8 +323,10 @@ do_seek() {
   # v5: mini progress bar after seek
   local pos_i dur_i pct bar_fill bar_empty
   pos_i=$(echo "$pos" | awk -F: '{print $1*60+$2}' 2>/dev/null || echo 0)
+  pos_i=$(printf '%s' "${pos_i:-0}" | tr -cd '0-9'); pos_i="${pos_i:-0}"
   dur_i=$(echo "$dur" | awk -F: '{print $1*60+$2}' 2>/dev/null || echo 1)
-  (( dur_i < 1 )) && dur_i=1
+  dur_i=$(printf '%s' "${dur_i:-1}" | tr -cd '0-9'); dur_i="${dur_i:-1}"
+  [[ "$dur_i" -lt 1 ]] 2>/dev/null && dur_i=1
   pct=$(( pos_i * 100 / dur_i ))
   bar_fill=$(printf '%*s' "$(( pct * 20 / 100 ))" '' | tr ' ' '━')
   bar_empty=$(printf '%*s' "$(( 20 - pct * 20 / 100 ))" '' | tr ' ' '─')

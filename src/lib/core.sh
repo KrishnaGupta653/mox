@@ -24,7 +24,8 @@ _load_config() {
     line="${line%"${line##*[![:space:]]}"}"
     [[ -z "$line" || "$line" == \#* ]] && continue
 
-    if [[ ! "$line" =~ '^[A-Z_][A-Z0-9_]*=[^;&|`$<>(){}[\]\\]*$' ]]; then
+    # Validate line format: KEY=value (block dangerous shell metacharacters)
+    if [[ "$line" =~ [';|&`$<>(){}\\[]' ]] || [[ ! "$line" =~ ^[A-Z_][A-Z0-9_]*= ]]; then
       printf 'mox config: ignoring unsafe line: %s\n' "$line" >&2
       continue
     fi
@@ -118,7 +119,8 @@ _resolve_bin() {
 _ensure_bin() {
   local varname="$1" binary="$2"
   # Already resolved (non-empty)?
-  [[ -n "${(P)varname}" ]] && return 0
+  local current="${(P)varname-}"
+  [[ -n "$current" ]] && return 0
   local path; path=$(_resolve_bin "$binary")
   if [[ -n "$path" ]]; then
     eval "${varname}=${(q)path}"
@@ -219,7 +221,10 @@ _check_deps() {
 
 # ── _check_ytdlp_age ────────────────────────────────────────────
 _check_ytdlp_age() {
-  [[ -x "$YTDLP" ]] || return
+  if [[ -z "${YTDLP:-}" ]]; then
+    _ensure_bin YTDLP yt-dlp
+  fi
+  [[ -x "${YTDLP:-}" ]] || return
   local ver_file="$CACHE_DIR/.ytdlp_version_check"
   local age; age=$(_cache_age "$ver_file" 2>/dev/null || echo 99999)
   (( age < 86400 )) && return
@@ -250,7 +255,17 @@ _detect_audio_devices() {
 # ── _start ──────────────────────────────────────────────────────
 _start() {
   _check_deps
-  [ -S "$SOCKET" ] && return 0
+  # Check if socket exists AND mpv is actually responding
+  if [ -S "$SOCKET" ]; then
+    # Test if mpv is actually alive by trying to get a property
+    if echo '{"command":["get_property","idle-active"]}' | "$SOCAT" - "$SOCKET" 2>/dev/null | grep -q "data"; then
+      return 0
+    else
+      # Socket exists but mpv is dead - remove stale socket
+      _warn "found stale socket, cleaning up..."
+      rm -f "$SOCKET" 2>/dev/null
+    fi
+  fi
   if ! _lock "$LOCK_FILE" 5; then
     _info "waiting for daemon to start..."
     for i in $(seq 1 30); do

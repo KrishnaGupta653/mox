@@ -20,7 +20,7 @@ do_vol() {
       (( $1 > 150 )) && { _err "max volume is 150"; return 1; }
       ;;
   esac
-  
+
   _need
   case "${1:-}" in
     +)
@@ -101,10 +101,23 @@ do_norm() {
 
 # ── do_devices ──────────────────────────────────────────────────
 do_devices() {
+  # Ensure required binaries are initialized
+  _ensure_bin MPV mpv
+  _ensure_bin SOCAT socat
+  _ensure_bin JQ jq
+
   echo ""; echo "  ${C}audio devices:${X}"
-  "$MPV" --audio-device=help 2>&1 | grep "'" | sed 's/^/  /'
+  if [[ -n "$MPV" ]]; then
+    "$MPV" --audio-device=help 2>&1 | grep "'" | sed 's/^/  /'
+  else
+    echo "  ${R}✖ mpv not found${X}"
+  fi
   echo ""
-  echo "  current:     ${W}$(_get audio-device)${X}"
+  if [[ -S "$SOCKET" && -n "$SOCAT" && -n "$JQ" ]]; then
+    echo "  current:     ${W}$(_get audio-device)${X}"
+  else
+    echo "  current:     ${DIM}(daemon not running)${X}"
+  fi
   echo "  speakers:    ${W}${AUDIO_DEVICE_SPEAKERS:-not configured}${X}"
   echo "  headphones:  ${W}${AUDIO_DEVICE_HEADPHONES:-not configured}${X}"
   echo "  (set in: $CONFIG_FILE)"; echo ""

@@ -213,12 +213,12 @@
     0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(200,255,90,0.4); }
     50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(200,255,90,0); }
   }
-  
+
   @keyframes spin-loader {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
   }
-  
+
   .loading-spinner {
     display: inline-block;
     width: 12px;
@@ -715,16 +715,6 @@
 
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
-  .tab-panel.active.lyrics-panel { display: flex; }
-
-  /* ── LYRICS PANEL ── */
-  .lyrics-panel {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .lyrics-panel.hidden { display: none !important; }
 
   .lyrics-content {
     flex: 1;
@@ -1279,7 +1269,7 @@
       </div>
 
       <!-- Progress -->
-      <div class="progress-wrap" id="progress-wrap" onclick="seekClick(event)">
+      <div class="progress-wrap" id="progress-wrap" onclick="seekClick(event)" ontouchend="seekClick(event)">
         <div class="progress-track">
           <div class="progress-buffer" id="progress-buffer" style="width:0%"></div>
           <div class="progress-fill" id="progress-fill" style="width:0%"></div>
@@ -1300,7 +1290,7 @@
         <button class="ctrl-btn primary" id="play-btn" onclick="cmd('pause')" title="Play/Pause (mox pause)">▶</button>
         <button class="ctrl-btn" onclick="cmd('seek +10')" title="Forward 10s">⏩</button>
         <button class="ctrl-btn" onclick="cmd('next')" title="Next (mox next)">⏭</button>
-        <button class="ctrl-btn" onclick="cmd('like')" title="Like track (mox like)">♡</button>
+        <button class="ctrl-btn" id="like-btn" onclick="cmd('like')" title="Like track (mox like)">♡</button>
       </div>
 
       <!-- Volume -->
@@ -1373,6 +1363,7 @@
       <button class="eq-btn tab-btn" data-tab="lyrics" onclick="showTab('lyrics')">lyrics</button>
       <button class="eq-btn tab-btn" data-tab="search" onclick="showTab('search')">search</button>
       <button class="eq-btn tab-btn" data-tab="history" onclick="showTab('history')">history</button>
+      <button class="eq-btn tab-btn" data-tab="likes" onclick="showTab('likes')">likes</button>
       <button class="eq-btn tab-btn" data-tab="schedule" onclick="showTab('schedule')">schedule</button>
       <button class="eq-btn tab-btn" data-tab="eq" onclick="showTab('eq')">eq</button>
       <button class="eq-btn tab-btn" data-tab="plugins" onclick="showTab('plugins');loadPlugins()">plugins</button>
@@ -1399,11 +1390,14 @@
     <div class="card tab-panel" id="panel-search">
       <div class="card-label">search</div>
       <div class="search-box">
-        <input class="search-input" id="search-input" placeholder="Search YouTube from mox"
-               oninput="liveSuggest(this.value)"
-               onkeydown="if(event.key==='Enter'){cancelLiveSuggest();runSearch();} else if(event.key==='Escape'){clearSearch();}"
-               autocomplete="off" spellcheck="false">
-        <button class="eq-btn" onclick="runSearch()" title="Full search (20 results)">search</button>
+         <input class="search-input" id="search-input" placeholder="type a song name..."
+           oninput="liveSuggest(this.value)"
+           onkeydown="if(event.key==='Enter'){event.preventDefault();triggerSearchButton();} else if(event.key==='Escape'){clearSearch();}"
+           autocomplete="off" spellcheck="false">
+        <button class="eq-btn" id="search-btn" onclick="runSearch()" title="Full search (20 results)">
+          <span id="search-btn-text">search</span>
+          <span id="search-btn-spinner" class="loading-spinner" style="display:none;"></span>
+        </button>
         <button class="eq-btn" onclick="clearSearch()" title="Clear" style="padding:0 8px;">✕</button>
       </div>
       <div id="search-results">
@@ -1411,7 +1405,7 @@
       </div>
     </div>
 
-    <div class="card lyrics-panel tab-panel" id="panel-lyrics" style="min-height:200px;">
+    <div class="card tab-panel" id="panel-lyrics" style="min-height:200px;">
       <div class="card-label">lyrics <span class="tag tag-cyan" style="margin-left:8px;">lrclib.net</span></div>
       <div class="lyrics-content" id="lyrics-content">
         <div class="lyric-line active">♪ no lyrics loaded</div>
@@ -1424,8 +1418,19 @@
         <div class="card-label" style="margin-bottom:0">history</div>
         <button class="eq-btn" onclick="loadHistory()">refresh</button>
       </div>
+      <input class="queue-filter" id="history-filter" placeholder="filter history" oninput="filterHistory(this.value)" style="margin-bottom:10px;">
       <div class="history-list" id="history-list">
         <div style="color:var(--muted);font-size:12px;">loading history...</div>
+      </div>
+    </div>
+
+    <div class="card tab-panel" id="panel-likes">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:8px;">
+        <div class="card-label" style="margin-bottom:0">liked tracks</div>
+        <button class="eq-btn" onclick="loadLikes(true)">refresh</button>
+      </div>
+      <div class="history-list" id="likes-list">
+        <div style="color:var(--muted);font-size:12px;">loading likes...</div>
       </div>
     </div>
 
@@ -1548,7 +1553,7 @@
     <button class="ctrl-btn" onclick="cmd('next')" title="Next">⏭</button>
   </div>
   <div class="bottom-progress">
-    <div class="progress-track">
+    <div class="progress-track" onclick="seekClick(event)" ontouchend="seekClick(event)">
       <div class="progress-buffer" id="bottom-progress-buffer" style="width:0%"></div>
       <div class="progress-fill" id="bottom-progress-fill" style="width:0%"></div>
     </div>
@@ -1623,6 +1628,7 @@ const state = {
   autoDj: false,
   autoDjSeed: '',
   bufferPct: 0,
+  liked: false,
   _prevTitle: '',
 };
 
@@ -1631,6 +1637,8 @@ const uiStore = {
   paletteResults: [],
   historyResults: [],
   historyLoaded: false,
+  likesResults: [],
+  likesLoaded: false,
 };
 
 const API = (() => {
@@ -1671,7 +1679,7 @@ function escapeHtml(str) {
 
 async function apiState() {
   try {
-    const r = await fetch(API + '/api/state', {signal: AbortSignal.timeout(3000)});
+    const r = await fetch(API + '/api/state');
     if (!r.ok) {
       console.error('API state request failed:', r.status);
       return null;
@@ -1689,8 +1697,7 @@ async function apiCmd(cmdStr) {
     const r = await fetch(API + '/api/cmd', {
       method: 'POST',
       headers: apiHeaders(),
-      body: JSON.stringify({cmd: cmdStr}),
-      signal: AbortSignal.timeout(5000),
+      body: JSON.stringify({cmd: cmdStr})
     });
     if (!r.ok) {
       const data = await r.json().catch(() => ({msg: 'Command failed'}));
@@ -1708,22 +1715,25 @@ async function apiCmd(cmdStr) {
 }
 
 async function apiPlay(query) {
+  return apiQueue(query, 'replace');
+}
+
+async function apiQueue(query, mode = 'replace') {
   try {
     setCommandPending(true);
-    const r = await fetch(API + '/api/play', {
+    const r = await fetch(API + '/api/v2/play', {
       method: 'POST',
       headers: apiHeaders(),
-      body: JSON.stringify({query}),
-      signal: AbortSignal.timeout(35000),
+      body: JSON.stringify({query, mode})
     });
     if (!r.ok) {
       const data = await r.json().catch(() => ({msg: 'Play failed'}));
-      showToast('❌ ' + (data.msg || 'Play failed'));
+      showToast('❌ ' + (data.msg || 'Request failed'), 'error');
       return false;
     }
     return true;
   } catch (err) {
-    console.error('API play error:', err);
+    console.error('API queue/play error:', err);
     showToast('❌ Connection error');
     return false;
   } finally {
@@ -1731,19 +1741,23 @@ async function apiPlay(query) {
   }
 }
 
-async function apiSearch(query) {
+async function apiSearch(query, timeoutMs = 70000, silent = false) {
+  const startedAt = Date.now();
   try {
     const url = API + '/api/v2/search?q=' + encodeURIComponent(query);
-    const r = await fetch(url, {signal: AbortSignal.timeout(35000)});
+    console.debug('[uxi] search start', { query, url, timeoutMs });
+    const r = await fetch(url);
+    console.debug('[uxi] search response', { query, status: r.status, ok: r.ok, ms: Date.now() - startedAt });
     const data = await r.json().catch(() => ({ok: false, results: [], msg: 'Search failed'}));
+    console.debug('[uxi] search parsed', { query, ok: data.ok, count: (data.results || []).length, msg: data.msg });
     if (!r.ok || !data.ok) {
-      showToast(data.msg || 'Search failed', 'error');
+      if (!silent) showToast(data.msg || 'Search failed', 'error');
       return [];
     }
     return data.results || [];
   } catch (err) {
-    console.error('API search error:', err);
-    showToast('Search connection error', 'error');
+    console.error('[uxi] search error', { query, timeoutMs, ms: Date.now() - startedAt, err });
+    if (!silent) showToast('Search connection error', 'error');
     return [];
   }
 }
@@ -1762,6 +1776,42 @@ async function apiHistory(page = 1, limit = 50) {
     console.error('API history error:', err);
     showToast('History connection error', 'error');
     return [];
+  }
+}
+
+async function apiLikes() {
+  try {
+    const r = await fetch(API + '/api/v2/likes');
+    const data = await r.json().catch(() => ({ok: false, results: [], msg: 'Likes failed'}));
+    if (!r.ok || !data.ok) {
+      showToast(data.msg || 'Likes failed', 'error');
+      return [];
+    }
+    return data.results || [];
+  } catch (err) {
+    console.error('API likes error:', err);
+    showToast('Likes connection error', 'error');
+    return [];
+  }
+}
+
+async function apiUnlike(url) {
+  try {
+    const r = await fetch(API + '/api/v2/likes/remove', {
+      method: 'POST',
+      headers: apiHeaders(),
+      body: JSON.stringify({url})
+    });
+    const data = await r.json().catch(() => ({ok: false, msg: 'Unlike failed'}));
+    if (!r.ok || !data.ok) {
+      showToast(data.msg || 'Unlike failed', 'error');
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('API unlike error:', err);
+    showToast('Unlike connection error', 'error');
+    return false;
   }
 }
 
@@ -1794,28 +1844,33 @@ let sse = null;
 let pollInterval = null;
 let lastQueueJSON = '';
 let queueRowsCache = [];
+let lastQueueFilter = '';
+let lastActiveLyricIdx = -1;
 const POLL_INTERVAL = 500;
 const SSE_RECONNECT_DELAY = 3000;
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
+let syncMode = 'connecting';
 
 function connectSSE() {
   if (sse) {
     sse.close();
     sse = null;
   }
-  
+  syncMode = 'connecting';
+
   // Don't retry indefinitely
   if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
     console.warn('Max SSE reconnect attempts reached, using polling only');
     fallbackToPolling();
     return;
   }
-  
+
   try {
     sse = new EventSource(API + '/api/events');
     sse.onopen = () => {
       state.connecting = false;
+      syncMode = 'sse';
       reconnectAttempts = 0; // Reset on successful connection
       if (pollInterval) {
         clearInterval(pollInterval);
@@ -1846,7 +1901,7 @@ function connectSSE() {
       sse.close();
       sse = null;
       reconnectAttempts++;
-      
+
       if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
         setTimeout(connectSSE, SSE_RECONNECT_DELAY);
       } else {
@@ -1860,7 +1915,9 @@ function connectSSE() {
 }
 
 function fallbackToPolling() {
+  if (syncMode === 'sse') return;
   if (pollInterval) return;
+  syncMode = 'polling';
   pollInterval = setInterval(poll, POLL_INTERVAL);
   poll();
 }
@@ -1899,14 +1956,14 @@ function updateNowPlaying() {
   const {title, pos, dur, paused, volume, speed, queue, currentIdx, alive, connecting, bufferPct} = state;
 
   document.getElementById('track-title').textContent = escapeHtml(title || 'nothing playing');
-  
+
   // Update browser tab title with now playing
   if (title && title !== 'nothing playing') {
     document.title = `♪ ${title} — mox`;
   } else {
     document.title = 'mox — music';
   }
-  
+
   const metaEl = document.getElementById('track-meta');
   if (connecting && !alive) {
     metaEl.textContent = '— connecting… —';
@@ -1972,6 +2029,8 @@ function updateNowPlaying() {
   document.getElementById('repeat-badge').style.display = state.repeat ? '' : 'none';
   document.getElementById('autodj-badge').style.display = state.autoDj ? '' : 'none';
   document.getElementById('loop-one-badge').style.display = state.loopOne ? '' : 'none';
+  const likeBtn = document.getElementById('like-btn');
+  if (likeBtn) likeBtn.textContent = state.liked ? '♥' : '♡';
   const autodjStatus = document.getElementById('autodj-status');
   if (autodjStatus) {
     autodjStatus.textContent = state.autoDj
@@ -1987,6 +2046,8 @@ function updateQueue() {
   const el = document.getElementById('queue-list');
   const filterEl = document.getElementById('queue-filter');
   const filter = (filterEl?.value || '').trim().toLowerCase();
+  const filterChanged = filter !== lastQueueFilter;
+  lastQueueFilter = filter;
   if (!queue.length) {
     queueRowsCache = [];
     el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:20px 0;text-align:center;"><div style="font-size:22px;margin-bottom:8px;">♪</div><div>No tracks in queue.</div><button class="eq-btn" style="margin-top:10px" onclick="document.getElementById(\'search-input\').focus()">search</button></div>';
@@ -1997,9 +2058,11 @@ function updateQueue() {
     .filter(({item}) => !filter || (item.title || '').toLowerCase().includes(filter));
 
   if (!queueRowsCache.length) {
+    if (filterChanged) el.scrollTop = 0;
     el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:20px 0;text-align:center;">no queue matches</div>';
     return;
   }
+  if (filterChanged) el.scrollTop = 0;
   renderQueueWindow();
 }
 
@@ -2038,7 +2101,7 @@ function renderQueueItem({item, i}) {
     </div>
   ` : `<span class="queue-num">${i + 1}</span>`;
   return `
-  <div class="queue-item ${active ? 'active' : ''}" onclick="playQueueItem(${i})" data-queue-idx="${i}" draggable="true"
+  <div class="queue-item ${active ? 'active' : ''}" onclick="playQueueItem(${i})" data-queue-idx="${i}" data-real-idx="${i}" draggable="true"
        ondragstart="queueDragStart(event, ${i})" ondragover="queueDragOver(event)" ondragleave="queueDragLeave(event)" ondrop="queueDrop(event, ${i})" ondragend="queueDragEnd(event)">
     ${bars}
     <img class="queue-thumb ${thumb ? '' : 'empty'}" src="${thumb}" alt="">
@@ -2058,6 +2121,7 @@ function updateLyrics() {
   const {lyrics, pos} = state;
 
   if (!lyrics || typeof lyrics === 'string' || !lyrics.lines || !lyrics.lines.length) {
+    lastActiveLyricIdx = -1;
     if (!state.title || state.title === 'nothing playing') {
       el.innerHTML = '<div class="lyric-line active">♪ no lyrics loaded</div><div class="lyric-line">play a song to see lyrics</div>';
     } else if (lyrics === 'loading') {
@@ -2088,7 +2152,8 @@ function updateLyrics() {
     return `<div class="lyric-line ${cls}" ${onclick}>${text}</div>`;
   }).join('');
 
-  if (lyrics.synced) {
+  if (lyrics.synced && cur !== lastActiveLyricIdx) {
+    lastActiveLyricIdx = cur;
     const activeLine = el.querySelector('.active');
     if (activeLine) activeLine.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
@@ -2109,21 +2174,25 @@ function setCommandPending(isPending) {
 
 // Debounce timer for volume slider
 let volDebounceTimer;
+let lastSentVol = -1;
 
 async function setVolume(val) {
   const v = Math.max(0, Math.min(150, parseInt(val)));
-  
+
   // Update UI immediately for responsiveness
   document.getElementById('vol-val').textContent = v + '%';
-  
+
   // Debounce the API call to prevent spam
   clearTimeout(volDebounceTimer);
   volDebounceTimer = setTimeout(async () => {
+    if (Math.abs(v - lastSentVol) < 1) return;
+    if (Math.abs(v - Math.round(state.volume || 0)) < 1) return;
+    lastSentVol = v;
     const success = await apiCmd('vol ' + v);
     if (success) {
       showToast('🔊 volume: ' + v + '%');
     }
-  }, 150);
+  }, 300);
 }
 
 function updateSpeedButtons(speed) {
@@ -2184,7 +2253,7 @@ async function _fireSchedule(id) {
   const s = _schedules.find(s => s.id === id);
   if (!s) return;
   showToast(`⏰ Schedule: playing "${s.query}"`, 'info');
-  await apiPlay(s.query);
+  await apiQueue(s.query, 'replace');
   if (s.repeat) {
     // Re-arm for next day
     s.fireAt += 24 * 60 * 60 * 1000;
@@ -2361,12 +2430,8 @@ async function applyCustomEq() {
     await setEq('flat');
     return;
   }
-  // Build equalizer filter: equalizer=f=60:t=h:width=100:g=X,equalizer=...
-  const bandWidths = [100, 200, 300, 500, 800, 2000, 4000];
-  const chain = EQ_BANDS.map((freq, i) =>
-    `equalizer=f=${freq}:t=h:width=${bandWidths[i]}:g=${gains[i]}`
-  ).join(',');
-  const success = await apiCmd('eq-custom ' + chain);
+  const pairs = EQ_BANDS.map((freq, i) => `${freq} ${gains[i]}`).join(' ');
+  const success = await apiCmd('eq-custom ' + pairs);
   if (success) {
     showToast('🎚 custom EQ applied', 'success');
     // Deactivate all presets — custom mode active
@@ -2378,7 +2443,7 @@ async function applyCustomEq() {
 
 async function quickPlay(query) {
   showToast('🔍 searching: ' + query);
-  const success = await apiPlay(query);
+  const success = await apiQueue(query, 'replace');
   if (success) {
     showToast('🎵 playing: ' + query);
   }
@@ -2456,9 +2521,11 @@ function queueDragEnd(event) {
 
 async function seekClick(event) {
   if (!state.dur || state.dur <= 0) return;
+  if (event.type && event.type.startsWith('touch')) event.preventDefault();
   const rect = event.currentTarget.getBoundingClientRect();
-  const x = event.clientX - rect.left;
-  const pct = x / rect.width;
+  const pointer = event.changedTouches?.[0] || event.touches?.[0] || event;
+  const x = pointer.clientX - rect.left;
+  const pct = Math.max(0, Math.min(1, x / rect.width));
   const target = Math.round(pct * state.dur);
   const success = await apiCmd('seek ' + target);
   if (success) {
@@ -2597,7 +2664,7 @@ async function handleCmd(e) {
       await cmd(val);
     } else {
       showToast('🔍 searching: ' + val, 'info');
-      await apiPlay(val);
+      await apiQueue(val, 'replace');
     }
   }
   if (e.key === 'ArrowUp') {
@@ -2626,7 +2693,13 @@ let _liveSuggestAbort = null;
 function cancelLiveSuggest() {
   clearTimeout(_liveSuggestTimer);
   _liveSuggestTimer = null;
-  if (_liveSuggestAbort) { _liveSuggestAbort.abort(); _liveSuggestAbort = null; }
+  if (_liveSuggestAbort) {
+    try {
+      if (_liveSuggestAbort.evtSrc) _liveSuggestAbort.evtSrc.close();
+      else if (typeof _liveSuggestAbort.abort === 'function') _liveSuggestAbort.abort();
+    } catch (e) {}
+    _liveSuggestAbort = null;
+  }
 }
 
 function clearSearch() {
@@ -2635,7 +2708,36 @@ function clearSearch() {
   input.value = '';
   box.innerHTML = '<div style="color:var(--muted);font-size:12px;">type a song, artist, or URL</div>';
   cancelLiveSuggest();
+  setSearchButtonLoading(false);
   input.focus();
+}
+
+function setSearchButtonLoading(loading) {
+  const btn = document.getElementById('search-btn');
+  const text = document.getElementById('search-btn-text');
+  const spinner = document.getElementById('search-btn-spinner');
+  if (loading) {
+    text.style.display = 'none';
+    spinner.style.display = 'inline-block';
+    btn.disabled = true;
+    btn.style.opacity = '0.6';
+  } else {
+    text.style.display = 'inline';
+    spinner.style.display = 'none';
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
+}
+
+function triggerSearchButton() {
+  const btn = document.getElementById('search-btn');
+  // Visual click effect
+  btn.style.transform = 'scale(0.95)';
+  setTimeout(() => {
+    btn.style.transform = 'scale(1)';
+  }, 100);
+  // Trigger search
+  runSearch();
 }
 
 function liveSuggest(value) {
@@ -2645,86 +2747,208 @@ function liveSuggest(value) {
     // Don't auto-clear the box if a full search result is showing
     return;
   }
-  _liveSuggestTimer = setTimeout(async () => {
-    const box = document.getElementById('search-results');
-    // Show a subtle mini-skeleton (1 row) while fetching
-    box.innerHTML = '<div class="skeleton" style="height:28px;margin-bottom:4px;"></div>';
-    try {
+    _liveSuggestTimer = setTimeout(async () => {
+      const box = document.getElementById('search-results');
+      box.innerHTML = '<div class="skeleton" style="height:28px;margin-bottom:4px;"></div>';
+      // Cancel any previous SSE connection for suggestions
+      if (_liveSuggestAbort) { _liveSuggestAbort.abort(); _liveSuggestAbort = null; }
       _liveSuggestAbort = new AbortController();
-      const url = API + '/api/v2/search?q=' + encodeURIComponent(q) + '&limit=5';
-      const r = await fetch(url, { signal: _liveSuggestAbort.signal });
-      const data = await r.json().catch(() => ({ ok: false, results: [] }));
-      _liveSuggestAbort = null;
-      if (!data.ok || !data.results.length) {
-        box.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">No suggestions — press search for full results.</div>';
-        return;
+      const esUrl = API + '/api/v2/search/stream?q=' + encodeURIComponent(q) + '&limit=8';
+      try {
+        const evtSrc = new EventSource(esUrl);
+        uiStore.searchResults = [];
+        box.innerHTML = '';
+        let idx = 0;
+        const onMessage = (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            uiStore.searchResults.push(data);
+            const i = uiStore.searchResults.length - 1;
+            const thumb = youtubeThumb(data.url || '');
+            const node = document.createElement('div');
+            node.className = 'search-result';
+            node.style.padding = '8px 10px';
+            node.innerHTML = `
+              <img src="${thumb}" alt="" style="width:48px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0;${thumb ? '' : 'display:none;'}">
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;word-wrap:break-word;white-space:normal;">${escapeHtml(data.title || data.url || 'Unknown')}</div>
+                <small style="color:var(--muted);">${escapeHtml(data.duration || '')}</small>
+              </div>
+              <div style="display:flex;gap:6px;flex-shrink:0;">
+                <button class="eq-btn" onclick="playSearchResult(${i})" style="font-size:11px;padding:3px 8px;">▶ play</button>
+                <button class="eq-btn" onclick="queueSearchResult(${i})" style="font-size:11px;padding:3px 8px;">+ queue</button>
+                <button class="eq-btn" onclick="playNextSearchResult(${i})" style="font-size:11px;padding:3px 8px;">next</button>
+              </div>
+            `;
+            box.appendChild(node);
+          } catch (err) { console.warn('parse sse item', err); }
+        };
+        const onDone = (e) => {
+          try { evtSrc.close(); } catch(e){}
+        };
+        evtSrc.addEventListener('message', onMessage);
+        evtSrc.addEventListener('done', onDone);
+        evtSrc.onerror = () => { try { evtSrc.close(); } catch(e){} };
+        // store reference so we can cancel when input changes
+        _liveSuggestAbort = { evtSrc };
+      } catch (err) {
+        console.warn('SSE suggestions failed:', err);
+        box.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">No suggestions — press Enter or click search for full results.</div>';
       }
-      // Store in uiStore so playSearchResult/queueSearchResult still work
-      uiStore.searchResults = data.results;
-      box.innerHTML = data.results.map((item, idx) => `
-        <div class="search-result" style="padding:8px 10px;">
-          <div>
-            <div style="font-size:13px;">${escapeHtml(item.title || item.url || 'Unknown')}</div>
-            <small>${escapeHtml(item.duration || '')}</small>
-          </div>
-          <div style="display:flex;gap:6px;">
-            <button class="eq-btn" onclick="playSearchResult(${idx})" style="font-size:11px;padding:3px 8px;">▶ play</button>
-            <button class="eq-btn" onclick="queueSearchResult(${idx})" style="font-size:11px;padding:3px 8px;">+ queue</button>
-          </div>
-        </div>
-      `).join('') + `
-        <div style="text-align:center;padding:6px 0 2px;">
-          <button class="eq-btn" onclick="cancelLiveSuggest();runSearch()" style="font-size:11px;width:100%;">show all results</button>
-        </div>`;
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        box.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">Suggestion error — press search.</div>';
-      }
-    }
-  }, 400);
+    }, 250);
 }
+
+let _searchRequestId = 0;
 
 async function runSearch() {
   const input = document.getElementById('search-input');
   const box = document.getElementById('search-results');
   const query = input.value.trim();
   if (!query) return;
-  box.innerHTML = '<div class="skeleton"></div><div class="skeleton" style="margin-top:8px"></div><div class="skeleton" style="margin-top:8px"></div>';
-  const results = await apiSearch(query);
-  if (!results.length) {
-    box.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px;">No results found.</div>';
-    return;
+
+  // Cancel any live suggestions in progress
+  cancelLiveSuggest();
+
+  // Clear search results array to prevent stale index issues
+  uiStore.searchResults = [];
+
+  // Show loading state on button
+  setSearchButtonLoading(true);
+
+  // Show loading skeleton
+  box.innerHTML = '<div class="skeleton" style="height:28px;margin-bottom:4px;"></div>';
+
+  // Use streaming search to show results one by one as they arrive
+  try {
+    const esUrl = API + '/api/v2/search/stream?q=' + encodeURIComponent(query) + '&limit=20';
+    const evtSrc = new EventSource(esUrl);
+    box.innerHTML = '';
+
+    const onMessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        uiStore.searchResults.push(data);
+        const i = uiStore.searchResults.length - 1;
+        const thumb = youtubeThumb(data.url || '');
+        const node = document.createElement('div');
+        node.className = 'search-result';
+        node.style.padding = '8px 10px';
+        node.style.display = 'flex';
+        node.style.alignItems = 'center';
+        node.style.gap = '12px';
+        node.dataset.index = i;
+        node.innerHTML = `
+          <img src="${thumb}" alt="" style="width:48px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0;${thumb ? '' : 'display:none;'}">
+          <div style="flex:1;min-width:0;cursor:pointer;" class="search-result-title">
+            <div style="font-size:13px;word-wrap:break-word;white-space:normal;">${escapeHtml(data.title || data.url || 'Unknown')}</div>
+            <small style="color:var(--muted);">${escapeHtml(data.duration || '')}</small>
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0;">
+            <button class="eq-btn search-play-btn" data-index="${i}" style="font-size:11px;padding:3px 8px;">▶ play</button>
+            <button class="eq-btn search-queue-btn" data-index="${i}" style="font-size:11px;padding:3px 8px;">+ queue</button>
+            <button class="eq-btn search-next-btn" data-index="${i}" style="font-size:11px;padding:3px 8px;">next</button>
+          </div>
+        `;
+        box.appendChild(node);
+      } catch (err) {
+        console.warn('parse search result', err);
+      }
+    };
+
+    const onDone = (e) => {
+      try { evtSrc.close(); } catch(e){}
+      setSearchButtonLoading(false);
+      if (uiStore.searchResults.length === 0) {
+        box.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:12px;">No results found. Try a different search.</div>';
+      }
+    };
+
+    const onError = () => {
+      try { evtSrc.close(); } catch(e){}
+      setSearchButtonLoading(false);
+      if (uiStore.searchResults.length === 0) {
+        box.innerHTML = '<div style="color:var(--accent3);font-size:12px;padding:12px;">Search failed. Please try again.</div>';
+      }
+    };
+
+    evtSrc.addEventListener('message', onMessage);
+    evtSrc.addEventListener('done', onDone);
+    evtSrc.onerror = onError;
+
+    if (!box.dataset.searchBound) {
+      box.addEventListener('click', (e) => {
+        const target = e.target;
+        if (target.classList.contains('search-play-btn')) {
+          playSearchResult(parseInt(target.dataset.index));
+        } else if (target.classList.contains('search-queue-btn')) {
+          queueSearchResult(parseInt(target.dataset.index));
+        } else if (target.classList.contains('search-next-btn')) {
+          playNextSearchResult(parseInt(target.dataset.index));
+        } else if (target.classList.contains('search-result-title') || target.closest('.search-result-title')) {
+          const resultDiv = target.closest('.search-result');
+          if (resultDiv) playSearchResult(parseInt(resultDiv.dataset.index));
+        }
+      });
+      box.dataset.searchBound = '1';
+    }
+
+  } catch (err) {
+    console.error('Search failed:', err);
+    setSearchButtonLoading(false);
+    box.innerHTML = '<div style="color:var(--accent3);font-size:12px;padding:12px;">Search failed. Please try again.</div>';
   }
-  box.innerHTML = results.map((item, idx) => `
-    <div class="search-result">
-      <div>
-        <div>${escapeHtml(item.title || item.url || 'Unknown')}</div>
-        <small>${escapeHtml(item.duration || '')}</small>
-      </div>
-      <div style="display:flex;gap:6px;">
-        <button class="eq-btn" onclick="playSearchResult(${idx})">play</button>
-        <button class="eq-btn" onclick="queueSearchResult(${idx})">queue</button>
-      </div>
-    </div>
-  `).join('');
-  uiStore.searchResults = results;
 }
 
 async function playSearchResult(idx) {
   const item = uiStore.searchResults[idx];
-  if (!item) return;
-  await apiPlay(item.url || item.title);
+  if (!item) {
+    showToast('Error: Song not found', 'error');
+    return;
+  }
+  const query = item.url || item.title;
+  showToast('▶ Playing: ' + (item.title || query), 'info');
+
+  try {
+    const success = await apiQueue(query, 'replace');
+    if (success) {
+      showToast('✓ Now playing', 'success');
+    } else {
+      showToast('❌ Play failed - try refreshing the page', 'error');
+    }
+  } catch (err) {
+    console.error('Play failed:', err);
+    showToast('❌ Connection error - is MPV running?', 'error');
+  }
 }
 
 async function queueSearchResult(idx) {
   const item = uiStore.searchResults[idx];
-  if (!item) return;
-  const success = await apiCmd('add ' + (item.url || item.title));
-  if (success) showToast('queued: ' + (item.title || item.url));
+  if (!item) {
+    showToast('Error: Song not found', 'error');
+    return;
+  }
+  const title = item.title || item.url || 'Unknown';
+  showToast('Adding to queue: ' + title, 'info');
+
+  const success = await apiQueue(item.url || item.title, 'add');
+  if (success) {
+    showToast('✓ Queued: ' + title, 'success');
+  } else {
+    showToast('❌ Failed to queue', 'error');
+  }
+}
+
+async function playNextSearchResult(idx) {
+  const item = uiStore.searchResults[idx];
+  if (!item) {
+    showToast('Error: Song not found', 'error');
+    return;
+  }
+  const success = await apiQueue(item.url || item.title, 'add-next');
+  if (success) showToast('Playing next: ' + (item.title || item.url), 'success');
 }
 
 function showTab(name) {
-  document.getElementById('panel-lyrics')?.classList.remove('hidden');
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.tab === name);
   });
@@ -2732,19 +2956,32 @@ function showTab(name) {
     panel.classList.toggle('active', panel.id === 'panel-' + name);
   });
   if (name === 'history' && !uiStore.historyLoaded) loadHistory();
+  if (name === 'likes' && !uiStore.likesLoaded) loadLikes();
 }
 
 async function loadHistory() {
   const list = document.getElementById('history-list');
-  uiStore.historyLoaded = false; // reset so errors stay retryable
   list.innerHTML = '<div class="skeleton"></div><div class="skeleton" style="margin-top:8px"></div>';
   const rows = await apiHistory(1, 50);
+  uiStore.historyResults = rows;
   if (!rows.length) {
     list.innerHTML = '<div style="color:var(--muted);font-size:12px;">No history yet.</div>';
     uiStore.historyLoaded = true; // mark done even on empty (not an error)
     return;
   }
-  list.innerHTML = rows.map((item, idx) => `
+  renderHistoryList(rows);
+  uiStore.historyLoaded = true; // mark done only after successful render
+}
+
+function renderHistoryList(rows) {
+  const list = document.getElementById('history-list');
+  if (!rows.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;">No history matches.</div>';
+    return;
+  }
+  list.innerHTML = rows.map((item) => {
+    const idx = uiStore.historyResults.indexOf(item);
+    return `
     <div class="history-item">
       <div>
         <div class="history-title">${escapeHtml(item.title || item.url || 'Unknown')}</div>
@@ -2754,15 +2991,70 @@ async function loadHistory() {
         <button class="eq-btn" onclick="playHistoryItem(${idx})">play</button>
       </div>
     </div>
-  `).join('');
-  uiStore.historyResults = rows;
-  uiStore.historyLoaded = true; // mark done only after successful render
+  `;
+  }).join('');
+}
+
+function filterHistory(q) {
+  const needle = (q || '').trim().toLowerCase();
+  const rows = needle
+    ? uiStore.historyResults.filter(item => ((item.title || '') + ' ' + (item.url || '')).toLowerCase().includes(needle))
+    : uiStore.historyResults;
+  renderHistoryList(rows);
 }
 
 async function playHistoryItem(idx) {
   const item = (uiStore.historyResults || [])[idx];
   if (!item) return;
-  await apiPlay(item.url || item.title);
+  await apiQueue(item.url || item.title, 'replace');
+}
+
+async function loadLikes(force = false) {
+  if (uiStore.likesLoaded && !force) return;
+  const list = document.getElementById('likes-list');
+  list.innerHTML = '<div class="skeleton"></div><div class="skeleton" style="margin-top:8px"></div>';
+  const rows = await apiLikes();
+  uiStore.likesResults = rows;
+  renderLikesList(rows);
+  uiStore.likesLoaded = true;
+}
+
+function renderLikesList(rows) {
+  const list = document.getElementById('likes-list');
+  if (!rows.length) {
+    list.innerHTML = '<div style="color:var(--muted);font-size:12px;">No liked tracks yet.</div>';
+    return;
+  }
+  list.innerHTML = rows.map((item, idx) => `
+    <div class="history-item">
+      <div>
+        <div class="history-title">${escapeHtml(item.title || item.url || 'Unknown')}</div>
+        <div class="history-meta">${escapeHtml(item.likedAt || item.date || '')}</div>
+      </div>
+      <div class="history-actions">
+        <button class="eq-btn" onclick="playLikedItem(${idx})">play</button>
+        <button class="eq-btn" onclick="unlikeItem(${idx})">unlike</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function playLikedItem(idx) {
+  const item = (uiStore.likesResults || [])[idx];
+  if (!item) return;
+  await apiQueue(item.url || item.title, 'replace');
+}
+
+async function unlikeItem(idx) {
+  const item = (uiStore.likesResults || [])[idx];
+  if (!item?.url) return;
+  const success = await apiUnlike(item.url);
+  if (!success) return;
+  uiStore.likesResults.splice(idx, 1);
+  renderLikesList(uiStore.likesResults);
+  state.liked = false;
+  updateNowPlaying();
+  showToast('unliked', 'success');
 }
 
 let paletteIndex = 0;
@@ -2824,7 +3116,7 @@ function runPaletteItem(idx) {
   const q = document.getElementById('palette-input').value.trim();
   document.getElementById('command-palette').classList.remove('show');
   if (item) item.action();
-  else if (q) apiPlay(q);
+  else if (q) apiQueue(q, 'replace');
 }
 
 function handlePaletteKey(e) {
@@ -3011,6 +3303,7 @@ function _updateSmartQueueUI() {
 
 async function _smartQueueCheck(st) {
   // Only run when: Smart Queue on, playing, queue exists, not already busy
+  if (!st.alive) return;
   if (!smartQueue.enabled) return;
   if (st.paused || !st.title) return;
   if (smartQueue.busy) return;
@@ -3037,7 +3330,7 @@ async function _smartQueueCheck(st) {
     for (const track of data.results) {
       const query = track.url || track.title;
       if (!query) continue;
-      await apiCmd('add ' + query);
+      await apiQueue(query, 'add');
       await new Promise(res => setTimeout(res, 400)); // small delay between adds
     }
 
@@ -3109,7 +3402,7 @@ function readShareLink() {
       setTimeout(async () => {
         const query = payload.u || payload.t;
         showToast(`\u25B6 Playing from shared link: ${payload.t || query}`, 'info');
-        await apiPlay(query);
+        await apiQueue(query, 'replace');
         // Clear the hash so refreshing doesn't re-play
         history.replaceState(null, '', location.pathname);
       }, 1500);
@@ -3124,11 +3417,6 @@ initTheme();
 document.getElementById('theme-toggle').onclick = toggleTheme;
 applyEqPreset(localStorage.getItem('mox-eq-preset') || 'flat');
 checkAuth();
-
-const lyricsVisible = localStorage.getItem('m-ui-lyrics-visible');
-if (lyricsVisible === 'false') {
-  document.getElementById('panel-lyrics').classList.add('hidden');
-}
 
 showToast('🎵 connecting to mox daemon… press ? for shortcuts', 'info');
 readShareLink();  // auto-play from URL hash if present

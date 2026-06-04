@@ -7,6 +7,7 @@ echo "🚨 Running mox edge case and error handling tests..."
 # Get the project root directory
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MOX_SCRIPT="$PROJECT_ROOT/src/mox.sh"
+ZSH_BIN="$(command -v zsh || true)"
 
 # Colors for output
 RED='\033[0;31m'
@@ -330,8 +331,8 @@ echo -e "\n${YELLOW}🌐 Network and External Dependencies${NC}"
 run_test_graceful_handling "Search without network" "timeout 5s \"$MOX_SCRIPT\" search 'test' 2>&1 | grep -E '(no.*results|network|timeout|failed)' || echo 'handled'"
 
 # Test with missing dependencies
-if ! command -v nonexistent_command >/dev/null 2>&1; then
-    run_test_graceful_handling "Missing dependency handling" "cd ../src && PATH='/nonexistent' timeout 3s ./mox.sh doctor"
+if ! command -v nonexistent_command >/dev/null 2>&1 && [[ -n "$ZSH_BIN" ]]; then
+    run_test_graceful_handling "Missing dependency handling" "cd '$PROJECT_ROOT/src' && PATH='/nonexistent' '$ZSH_BIN' ./mox.sh doctor"
 fi
 
 echo -e "\n${YELLOW}📊 Resource Exhaustion Tests${NC}"

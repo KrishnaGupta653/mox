@@ -38,6 +38,7 @@
 
 set -u
 set +v +x  # Disable verbose/debug output
+setopt NULL_GLOB  # Allow globs to expand to nothing without error
 
 # ── paths ────────────────────────────────────────────────────
 MUSIC_ROOT="${MUSIC_ROOT:-$HOME/music_system}"
@@ -101,15 +102,32 @@ M_UPDATE_SHA256=""         # expected SHA256 for self-update
 UXI_AUTH=0                 # 1 = require web UI PIN on first visit
 UXI_PORT="${UXI_PORT:-7700}"
 
+# ── binary paths (resolved lazily via _ensure_bin) ─────────────
+# Declare variables empty; they are populated on first use via _ensure_bin.
+# Commands that need a specific binary call _ensure_bin before using it.
+YTDLP="${YTDLP:-}"
+MPV="${MPV:-}"
+FZF="${FZF:-}"
+SOCAT="${SOCAT:-}"
+JQ="${JQ:-}"
+CURL="${CURL:-}"
+CHAFA="${CHAFA:-}"
+FFPROBE="${FFPROBE:-}"
+
 # ── load user config ──────────────────────────────────────────
 
 # ── Load library modules ────────────────────────────────────────────────────
 _MOX_LIB_DIR="$(cd "$(dirname "${(%):-%N}")" && pwd)/lib"
+MOX_LIB_ONLY=1
 for _mox_lib in core lock ipc search playback queue audio history playlist lyrics schedule ui; do
   # shellcheck source=/dev/null
   source "$_MOX_LIB_DIR/${_mox_lib}.sh" || { echo "Error: failed to load lib/${_mox_lib}.sh" >&2; exit 1; }
 done
-unset _mox_lib _MOX_LIB_DIR
+unset MOX_LIB_ONLY _mox_lib _MOX_LIB_DIR
+
+# Load and validate user configuration after libs are loaded
+_load_config
+_validate_config
 
 
 # ── main dispatch ─────────────────────────────────────────────
@@ -124,6 +142,7 @@ if [ $# -eq 0 ]; then
     echo "    ${G}mox uxi${X}                 open web UI"
     echo ""
   else
+    _check_deps
     do_status
   fi
   exit 0

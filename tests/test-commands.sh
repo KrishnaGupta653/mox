@@ -364,7 +364,7 @@ run_test_with_output "reload-config" "timeout 3s \"$MOX_SCRIPT\" reload-config" 
 echo -e "\n${YELLOW}🎯 Local Music Commands${NC}"
 
 run_test_with_output "index command" "timeout 5s \"$MOX_SCRIPT\" index" "ffprobe.*not.*found|Scanning.*local|indexed"
-run_test_with_output "local command" "timeout 3s \"$MOX_SCRIPT\" local" "No.*local.*music|test_song|interrupted.*system.*call"
+run_test_with_output "local command" "timeout 3s \"$MOX_SCRIPT\" local" "No.*local.*music|no.*local.*index|test_song|interrupted.*system.*call"
 
 echo -e "\n${YELLOW}🔗 Casting Commands${NC}"
 

@@ -4,6 +4,17 @@
 # shellcheck shell=bash
 
 
+# Ensure associative lock FD map exists (zsh treats non-assoc subscripts as arithmetic)
+if [[ -z "${_MOX_LOCK_FDS_INIT:-}" ]]; then
+  if [[ -n "${ZSH_VERSION:-}" ]]; then
+    typeset -gA _MOX_LOCK_FDS
+  else
+    declare -gA _MOX_LOCK_FDS 2>/dev/null || true
+  fi
+  _MOX_LOCK_FDS_INIT=1
+fi
+
+
 # ── _lock ───────────────────────────────────────────────────────
 _lock() {
   local lf="$1" timeout="${2:-5}"
