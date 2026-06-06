@@ -33,6 +33,7 @@ import urllib.parse
 import urllib.request
 import shutil
 from collections import OrderedDict, deque
+from typing import List
 
 # Configure logging
 def _setup_logging():
@@ -868,7 +869,7 @@ def _resolve_mox_binary() -> str:
     return "mox"
 
 
-def _mox_args_for_mode(query: str, mode: str) -> list[str]:
+def _mox_args_for_mode(query: str, mode: str) -> List[str]:
     mode = (mode or "replace").strip().lower()
     if mode not in ("replace", "add", "add-next"):
         raise ValueError("mode must be replace, add, or add-next")
@@ -1531,7 +1532,7 @@ class _SseClient:
 
 
 # Registry of live SSE connections (keyed by id(wfile) for O(1) lookup).
-_sse_clients: list[_SseClient] = []
+_sse_clients: List[_SseClient] = []
 _sse_clients_lock = threading.Lock()
 _last_state_json = None
 _state_poll_interval = 0.5
