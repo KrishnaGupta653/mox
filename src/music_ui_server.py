@@ -32,8 +32,9 @@ import time
 import urllib.parse
 import urllib.request
 import shutil
+from __future__ import annotations
 from collections import OrderedDict, deque
-from typing import List
+from typing import List, Optional
 
 # Configure logging
 def _setup_logging():
@@ -1848,7 +1849,7 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             # SSE_FAILED: unregister and let client fall back to POLLING
             _sse_unregister(client)
 
-    def _parse_search_line(self, raw_line: str) -> dict | None:
+    def _parse_search_line(self, raw_line: str) -> Optional[dict]:
         """Parse one pipe-delimited yt-dlp search row."""
         line = re.sub(r'\x1b\[[0-9;]*m', '', raw_line).strip()
         if not line:

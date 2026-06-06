@@ -23,16 +23,19 @@
 ## 🚀 Quick Install
 
 ### npm (Recommended)
+
 ```bash
 npm install -g mox-cli
 ```
 
 ### Homebrew (macOS/Linux)
+
 ```bash
 brew install KrishnaGupta653/tap/mox-cli
 ```
 
 ### Manual Installation
+
 ```bash
 git clone https://github.com/KrishnaGupta653/mox.git
 cd mox
@@ -42,6 +45,7 @@ cd mox
 ## 📋 Requirements
 
 ### Essential Dependencies
+
 - **zsh** - Shell interpreter
 - **python3** (≥3.6) - For web UI server
 - **mpv** - Media player backend
@@ -49,6 +53,7 @@ cd mox
 - **jq** - JSON processing
 
 ### Optional (Recommended)
+
 - **yt-dlp** - YouTube/streaming support
 - **fzf** - Interactive fuzzy search
 - **chafa** - Terminal image display
@@ -57,26 +62,31 @@ cd mox
 ### Installation Commands
 
 **macOS (Homebrew):**
+
 ```bash
 brew install mpv curl jq python3 socat zsh yt-dlp fzf chafa ffmpeg
 ```
 
 **Ubuntu/Debian:**
+
 ```bash
 sudo apt update && sudo apt install mpv curl jq python3 socat zsh yt-dlp fzf chafa ffmpeg
 ```
 
 **Fedora/RHEL:**
+
 ```bash
 sudo dnf install mpv curl jq python3 socat zsh yt-dlp fzf chafa ffmpeg
 ```
 
 **Arch Linux:**
+
 ```bash
 sudo pacman -S mpv curl jq python socat zsh yt-dlp fzf chafa ffmpeg
 ```
 
 **WSL (Windows Subsystem for Linux):**
+
 ```bash
 # Install dependencies
 sudo apt update && sudo apt install mpv curl jq python3 socat zsh yt-dlp fzf chafa ffmpeg
@@ -107,7 +117,7 @@ mox play "https://youtube.com/watch?v=..."
 
 # Control playback
 mox pause    # or mox pp
-mox next     # or mox mn  
+mox next     # or mox mn
 mox prev     # or mox mb
 mox vol 80   # Set volume to 80%
 
@@ -118,11 +128,13 @@ mox status   # or mox bar
 ## 🌐 Web Interface
 
 Launch the web UI with:
+
 ```bash
 mox uxi
 ```
 
 The web interface provides:
+
 - 🎵 Real-time player status and controls
 - 📋 Queue management with drag & drop
 - 🎤 Synchronized lyrics display
@@ -133,6 +145,7 @@ The web interface provides:
 ## 📖 Command Reference
 
 ### Playback Control
+
 ```bash
 mox play <url|query>     # Play music from URL or search
 mox pause               # Toggle pause (alias: pp)
@@ -143,6 +156,7 @@ mox seek <time>         # Seek to position (e.g., +30, -10, 1:30)
 ```
 
 ### Volume & Audio
+
 ```bash
 mox vol <level>         # Set volume (0-100)
 mox vol +/-<amount>     # Adjust volume relatively
@@ -152,6 +166,7 @@ mox norm                # Normalize audio
 ```
 
 ### Queue Management
+
 ```bash
 mox add <url|query>     # Add to queue
 mox add-next <query>    # Add after current track
@@ -162,6 +177,7 @@ mox queue               # Show current queue
 ```
 
 ### Search & Discovery
+
 ```bash
 mox search <query>      # Search for music
 mox similar             # Find similar tracks
@@ -170,6 +186,7 @@ mox autodj              # Toggle Auto-DJ mode
 ```
 
 ### Playlists
+
 ```bash
 mox save <name>         # Save current queue as playlist
 mox load <name>         # Load playlist
@@ -178,6 +195,7 @@ mox playlist <name>     # Show playlist contents
 ```
 
 ### History & Likes
+
 ```bash
 mox history             # Show listening history
 mox like                # Like current track
@@ -186,6 +204,7 @@ mox export              # Export data to CSV
 ```
 
 ### Information
+
 ```bash
 mox status              # Current track info (alias: bar)
 mox lyrics              # Show synchronized lyrics
@@ -194,6 +213,7 @@ mox info                # Detailed track information
 ```
 
 ### System
+
 ```bash
 mox start               # Start mpv daemon
 mox kill                # Stop mpv daemon
@@ -252,7 +272,9 @@ MUSIC_ROOT="$HOME/music_system"
 ## 🔧 Advanced Usage
 
 ### Bookmarks
+
 Save and restore complete queue states:
+
 ```bash
 mox bookmark save "party-mix"    # Save current state
 mox bookmark load "party-mix"    # Restore queue and position
@@ -260,20 +282,25 @@ mox bookmarks                    # List all bookmarks
 ```
 
 ### Text File Playlists
+
 Play from text files with URLs:
+
 ```bash
 mox txt playlist.txt             # Play from text file
 mox txt playlist.txt --resume    # Resume from last position
 ```
 
 ### Local Music Library
+
 Index and search your local music:
+
 ```bash
 mox index                        # Scan ~/Music directory
 mox local "artist name"          # Search local library
 ```
 
 ### Keyboard Shortcuts (Web UI)
+
 - `Space` - Play/Pause
 - `→` / `←` - Next/Previous track
 - `↑` / `↓` - Volume up/down
@@ -287,11 +314,13 @@ mox local "artist name"          # Search local library
 ### Common Issues
 
 **mpv not starting:**
+
 ```bash
 mox kill && mox start    # Restart mpv daemon
 ```
 
 **Web UI not accessible:**
+
 ```bash
 # Check if port is available
 lsof -i :7700
@@ -300,17 +329,21 @@ UXI_PORT=7701 mox uxi
 ```
 
 **Missing dependencies:**
+
 ```bash
 ./scripts/install.sh        # Re-run installation script
 ```
 
 **Permission issues:**
+
 ```bash
 chmod +x src/mox.sh src/music_ui_server.py
 ```
 
 ### Debug Mode
+
 Enable verbose logging:
+
 ```bash
 export DEBUG=1
 mox <command>
