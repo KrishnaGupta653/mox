@@ -15,7 +15,7 @@ Connects to mpv's Unix domain socket, exposes HTTP endpoints:
 Lyrics are fetched from lrclib.net and cached per track. /api/state never blocks on lyrics;
 returns cached or "loading" state. Background prefetcher keeps cache warm.
 """
-
+from __future__ import annotations
 import http.server
 import json
 import logging
@@ -32,7 +32,6 @@ import time
 import urllib.parse
 import urllib.request
 import shutil
-from __future__ import annotations
 from collections import OrderedDict, deque
 from typing import List, Optional
 
