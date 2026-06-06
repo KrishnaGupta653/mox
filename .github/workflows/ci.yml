@@ -92,7 +92,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y curl jq mpv python3-pip zsh
+          sudo apt-get install -y curl jq mpv python3-pip socat zsh
           # Install yt-dlp
           pip3 install yt-dlp
       
@@ -100,7 +100,7 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           brew update
-          brew install curl jq mpv python3 zsh
+          brew install curl jq mpv python3 socat zsh
           # Install yt-dlp
           pip3 install yt-dlp
       
@@ -270,7 +270,7 @@ jobs:
           Section: sound
           Priority: optional
           Architecture: all
-          Depends: mpv, curl, jq, python3 (>= 3.6), python3-pip
+          Depends: mpv, curl, jq, socat, python3 (>= 3.6), python3-pip, zsh
           Recommends: yt-dlp, fzf, chafa, ffmpeg
           Maintainer: Krishna Gupta <krishnagupta653@gmail.com>
           Description: Terminal music CLI with web UI
@@ -280,10 +280,18 @@ jobs:
           EOF
           
           # Install files
-          cp mox "${PKG_NAME}/usr/bin/"
-          cp -r src/* "${PKG_NAME}/usr/share/mox/"
+          cp -r src "${PKG_NAME}/usr/share/mox/"
           cp README.md LICENSE "${PKG_NAME}/usr/share/doc/mox-cli/"
           
+          cat > "${PKG_NAME}/usr/bin/mox" << EOF
+          #!/bin/bash
+          export MOX_PACKAGE_DIR="/usr/share/mox"
+          exec "/usr/share/mox/src/mox.sh" "\$@"
+          EOF
+          chmod 755 "${PKG_NAME}/usr/bin/mox"
+          chmod 755 "${PKG_NAME}/usr/share/mox/src/mox.sh"
+          chmod 755 "${PKG_NAME}/usr/share/mox/src/music_ui_server.py"
+
           # Build package
           dpkg-deb --build "${PKG_NAME}"
       

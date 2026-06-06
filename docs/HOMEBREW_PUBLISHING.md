@@ -42,10 +42,10 @@ mkdir -p Formula
 
 ## Step 3: Create the Formula
 
-Create `Formula/mox.rb`:
+Create `Formula/mox-cli.rb`:
 
 ```ruby
-class Mox < Formula
+class MoxCli < Formula
   desc "Terminal music CLI - A powerful command-line music player"
   homepage "https://github.com/KrishnaGupta653/mox"
   url "https://github.com/KrishnaGupta653/mox/archive/v7.2.2.tar.gz"
@@ -56,6 +56,7 @@ class Mox < Formula
   depends_on "mpv"
   depends_on "curl"
   depends_on "jq"
+  depends_on "socat"
   depends_on "python@3.11"
   depends_on "zsh"
 
@@ -114,21 +115,21 @@ shasum -a 256 mox-7.2.2.tar.gz
 
 ```bash
 # Install from your tap
-brew install KrishnaGupta653/tap/mox
+brew install KrishnaGupta653/tap/mox-cli
 
 # Test the installation
 mox --help
 
 # Uninstall for testing
-brew uninstall mox
+brew uninstall mox-cli
 ```
 
 ## Step 6: Publish Your Tap
 
 ```bash
 # Commit and push your formula
-git add Formula/mox.rb
-git commit -m "Add mox formula v7.2.2"
+git add Formula/mox-cli.rb
+git commit -m "Add mox-cli formula v7.2.2"
 git push origin main
 ```
 
@@ -139,10 +140,10 @@ git push origin main
 brew tap KrishnaGupta653/tap
 
 # Install mox
-brew install mox
+brew install mox-cli
 
 # Or install directly
-brew install KrishnaGupta653/tap/mox
+brew install KrishnaGupta653/tap/mox-cli
 ```
 
 ## Updating the Formula
@@ -151,11 +152,11 @@ brew install KrishnaGupta653/tap/mox
 # 1. Update version in formula
 # 2. Update URL and SHA256
 # 3. Test installation
-brew reinstall KrishnaGupta653/tap/mox
+brew reinstall KrishnaGupta653/tap/mox-cli
 
 # 4. Commit and push
-git add Formula/mox.rb
-git commit -m "Update mox to v6.0.1"
+git add Formula/mox-cli.rb
+git commit -m "Update mox-cli to v7.2.3"
 git push
 ```
 
@@ -167,9 +168,9 @@ For inclusion in the main Homebrew repository:
 # 1. Fork homebrew-core
 git clone https://github.com/Homebrew/homebrew-core.git
 
-# 2. Create formula in Formula/mox.rb
+# 2. Create formula in Formula/mox-cli.rb
 # 3. Test thoroughly
-brew install --build-from-source ./Formula/mox.rb
+brew install --build-from-source ./Formula/mox-cli.rb
 
 # 4. Submit PR to homebrew-core
 ```
@@ -187,11 +188,11 @@ brew install --build-from-source ./Formula/mox.rb
 
 ```bash
 # Audit formula
-brew audit --strict Formula/mox.rb
+brew audit --strict Formula/mox-cli.rb
 
 # Test installation
-brew install --verbose --debug Formula/mox.rb
+brew install --verbose --debug Formula/mox-cli.rb
 
 # Check linkage
-brew linkage mox
+brew linkage mox-cli
 ```

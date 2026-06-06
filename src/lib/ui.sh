@@ -1414,6 +1414,14 @@ do_history_stats() {
   [[ ! -s "$HISTORY_FILE" ]] && { _warn "no history yet"; return; }
   local with_counts
   with_counts=$(awk -F'\t' '{count[$3]++; title[$3]=$2; date[$3]=$1} END{for(u in count) print count[u]"\t"date[u]"\t"title[u]"\t"u}' "$HISTORY_FILE" | sort -rn)
+  if [[ ! -t 0 ]] || [[ -n "${MOX_TEST_MODE:-}" ]]; then
+    echo ""
+    echo "  ${C}history statistics${X}"
+    echo ""
+    echo "$with_counts" | head -20 | awk -F'\t' '{printf "  %sx  %s  (%s)\n", $1, $3, $2}'
+    echo ""
+    return 0
+  fi
   local line url
   line=$(echo "$with_counts" | "$FZF" --height 60% --reverse \
     --prompt "🕑 history (count) > " \

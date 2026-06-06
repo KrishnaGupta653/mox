@@ -9,7 +9,7 @@ Before publishing a new release:
 1. **Update version numbers**:
    - [ ] Update `VERSION` file
    - [ ] Update `package.json` version
-   - [ ] Update `mox.rb` version
+   - [ ] Update `packaging/homebrew/mox-cli.rb` version
    - [ ] Update `debian/changelog`
 
 2. **Run tests**:
@@ -41,13 +41,13 @@ Before publishing a new release:
 npm pack --dry-run
 
 # 2. Test installation locally
-npm install -g ./mox-*.tgz
+npm install -g ./mox-cli-*.tgz
 
 # 3. Publish to npm
 npm publish
 
 # 4. Verify publication
-npm info mox
+npm info mox-cli
 ```
 
 ### Automated Publishing
@@ -58,7 +58,7 @@ Publishing is automated via GitHub Actions when you create a release:
 3. Requires `NPM_TOKEN` secret in repository settings
 
 ### NPM Package Details
-- **Package name**: `mox`
+- **Package name**: `mox-cli`
 - **Global command**: `mox`
 - **Files included**: See `package.json` `files` array
 - **Post-install**: Runs `install.sh` automatically
@@ -85,23 +85,23 @@ Publishing is automated via GitHub Actions when you create a release:
 
 3. **Update formula**:
    ```bash
-   # Update mox.rb with new version and SHA256
-   sed -i "s/sha256 \".*\"/sha256 \"NEW_SHA256_HERE\"/" mox.rb
+   # Update packaging/homebrew/mox-cli.rb with new version and SHA256
+   sed -i "s/sha256 \".*\"/sha256 \"NEW_SHA256_HERE\"/" packaging/homebrew/mox-cli.rb
    ```
 
 4. **Test formula locally**:
    ```bash
-   brew install --build-from-source ./mox.rb
-   brew test mox
-   brew uninstall mox
+   brew install --build-from-source ./packaging/homebrew/mox-cli.rb
+   brew test mox-cli
+   brew uninstall mox-cli
    ```
 
 5. **Push to tap repository**:
    ```bash
    # In your homebrew-tap repository
-   cp mox.rb Formula/
-   git add Formula/mox.rb
-   git commit -m "Update mox to v7.2.2"
+   cp packaging/homebrew/mox-cli.rb Formula/mox-cli.rb
+   git add Formula/mox-cli.rb
+   git commit -m "Update mox-cli to v7.2.2"
    git push origin main
    ```
 
@@ -109,7 +109,7 @@ Publishing is automated via GitHub Actions when you create a release:
 Users can install with:
 ```bash
 brew tap KrishnaGupta653/tap
-brew install mox
+brew install mox-cli
 ```
 
 ## 🐧 APT/Debian Publishing
@@ -137,9 +137,9 @@ brew install mox
 
 3. **Test package**:
    ```bash
-   sudo dpkg -i ../mox_7.2.2-1_all.deb
+   sudo dpkg -i ../mox-cli_7.2.2_all.deb
    mox help
-   sudo dpkg -r mox
+   sudo dpkg -r mox-cli
    ```
 
 ### Package Repository Setup
@@ -153,7 +153,7 @@ For a proper APT repository, you'll need to:
 
 2. **Add packages**:
    ```bash
-   cp mox_*.deb apt-repo/pool/main/
+   cp mox-cli_*.deb apt-repo/pool/main/
    ```
 
 3. **Generate package index**:
@@ -179,11 +179,11 @@ Users can install with:
 # Add repository (if using custom repo)
 echo "deb [trusted=yes] https://your-repo.com/apt stable main" | sudo tee /etc/apt/sources.list.d/mox.list
 sudo apt update
-sudo apt install mox
+sudo apt install mox-cli
 
 # Or install directly from .deb file
-wget https://github.com/KrishnaGupta653/mox/releases/download/v7.2.2/mox_7.2.2-1_all.deb
-sudo dpkg -i mox_7.2.2-1_all.deb
+wget https://github.com/KrishnaGupta653/mox/releases/download/v7.2.2/mox-cli_7.2.2_all.deb
+sudo dpkg -i mox-cli_7.2.2_all.deb
 sudo apt-get install -f  # Fix dependencies if needed
 ```
 
@@ -229,23 +229,23 @@ After publishing, verify installations:
 
 ### NPM
 ```bash
-npm install -g mox
+npm install -g mox-cli
 mox help
-npm uninstall -g mox
+npm uninstall -g mox-cli
 ```
 
 ### Homebrew
 ```bash
-brew install KrishnaGupta653/tap/mox
+brew install KrishnaGupta653/tap/mox-cli
 mox help
-brew uninstall mox
+brew uninstall mox-cli
 ```
 
 ### APT/Debian
 ```bash
-sudo dpkg -i mox_*.deb
+sudo dpkg -i mox-cli_*.deb
 mox help
-sudo dpkg -r mox
+sudo dpkg -r mox-cli
 ```
 
 ## 🐛 Troubleshooting

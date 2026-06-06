@@ -29,7 +29,7 @@ chmod 700 ~/.config/mox/
 ### npm (Recommended)
 ```bash
 # Global installation
-npm install -g mox
+npm install -g mox-cli
 
 # Verify installation
 mox --version
@@ -42,7 +42,7 @@ mox doctor
 brew tap KrishnaGupta653/tap
 
 # Install
-brew install mox
+brew install mox-cli
 
 # Update
 brew upgrade mox
@@ -322,10 +322,10 @@ mox doctor
 
 # Install missing dependencies
 # Ubuntu/Debian
-sudo apt update && sudo apt install mpv curl jq python3 yt-dlp
+sudo apt update && sudo apt install mpv curl jq python3 socat zsh yt-dlp
 
 # macOS
-brew install mpv curl jq python3 yt-dlp
+brew install mpv curl jq python3 socat zsh yt-dlp
 ```
 
 #### 4. Web UI Not Loading

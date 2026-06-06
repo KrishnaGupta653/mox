@@ -9,6 +9,7 @@ class MoxCli < Formula
   depends_on "mpv"
   depends_on "curl"
   depends_on "jq"
+  depends_on "socat"
   depends_on "python@3.11"
   depends_on "yt-dlp" => :recommended
   depends_on "fzf" => :recommended
@@ -99,7 +100,7 @@ class MoxCli < Formula
     <<~EOS
       To use all features of mox, you may want to install additional dependencies:
       
-        brew install yt-dlp fzf chafa ffmpeg socat
+        brew install yt-dlp fzf chafa ffmpeg
       
       For YouTube support, consider setting up API keys:
         https://github.com/KrishnaGupta653/mox#configuration

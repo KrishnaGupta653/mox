@@ -1,4 +1,4 @@
-mox (7.2.2-1) unstable; urgency=medium
+mox-cli (7.2.2-1) unstable; urgency=medium
 
   * New major release 7.2.2
   * Added package management support for npm and Homebrew
@@ -12,7 +12,7 @@ mox (7.2.2-1) unstable; urgency=medium
 
  -- music-cli-pro <krishnagupta653@gmail.com>  Sun, 23 Mar 2026 16:00:00 +0000
 
-mox (5.0.0-1) unstable; urgency=medium
+mox-cli (5.0.0-1) unstable; urgency=medium
 
   * Initial Debian package release
   * Feature-rich terminal music player

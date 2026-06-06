@@ -29,7 +29,7 @@ npm install -g mox-cli
 
 ### Homebrew (macOS/Linux)
 ```bash
-brew install KrishnaGupta653/tap/mox
+brew install KrishnaGupta653/tap/mox-cli
 ```
 
 ### Manual Installation
@@ -58,28 +58,28 @@ cd mox
 
 **macOS (Homebrew):**
 ```bash
-brew install mpv curl jq python3 zsh yt-dlp fzf chafa ffmpeg
+brew install mpv curl jq python3 socat zsh yt-dlp fzf chafa ffmpeg
 ```
 
 **Ubuntu/Debian:**
 ```bash
-sudo apt update && sudo apt install mpv curl jq python3 zsh yt-dlp fzf chafa ffmpeg
+sudo apt update && sudo apt install mpv curl jq python3 socat zsh yt-dlp fzf chafa ffmpeg
 ```
 
 **Fedora/RHEL:**
 ```bash
-sudo dnf install mpv curl jq python3 zsh yt-dlp fzf chafa ffmpeg
+sudo dnf install mpv curl jq python3 socat zsh yt-dlp fzf chafa ffmpeg
 ```
 
 **Arch Linux:**
 ```bash
-sudo pacman -S mpv curl jq python zsh yt-dlp fzf chafa ffmpeg
+sudo pacman -S mpv curl jq python socat zsh yt-dlp fzf chafa ffmpeg
 ```
 
 **WSL (Windows Subsystem for Linux):**
 ```bash
 # Install dependencies
-sudo apt update && sudo apt install mpv curl jq python3 zsh yt-dlp fzf chafa ffmpeg
+sudo apt update && sudo apt install mpv curl jq python3 socat zsh yt-dlp fzf chafa ffmpeg
 
 # Audio setup (choose one):
 # Option 1: PulseAudio
@@ -306,7 +306,7 @@ UXI_PORT=7701 mox uxi
 
 **Permission issues:**
 ```bash
-chmod +x mox.sh music_ui_server.py
+chmod +x src/mox.sh src/music_ui_server.py
 ```
 
 ### Debug Mode

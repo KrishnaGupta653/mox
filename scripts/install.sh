@@ -104,6 +104,10 @@ if ! check_command "jq"; then
     MISSING_DEPS+=("jq")
 fi
 
+if ! check_command "socat"; then
+    MISSING_DEPS+=("socat")
+fi
+
 # Optional but recommended dependencies
 OPTIONAL_DEPS=()
 

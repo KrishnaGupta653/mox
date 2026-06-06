@@ -1205,7 +1205,7 @@ ALLOWED_CMD_ACTIONS = frozenset([
     "pause", "pp", "next", "mn", "prev", "mb", "stop", "seek", "vol", "volume",
     "speed", "repeat", "rp", "repeat-one", "ro", "shuffle", "playlist-play-index",
     "clear", "norm", "like", "autodj", "eq", "eq-custom", "sleep", "play", "add",
-    "mox", "qrm", "qmove",
+    "mox", "qrm", "qmove", "stats", "history-stats",
 
 ])
 
@@ -1245,6 +1245,9 @@ def _validate_cmd(cmd_str):
     elif action == "qrm":
         if len(parts) != 2 or not re.match(r'^[0-9]+$', parts[1]):
             return False, "qrm needs positive integer position"
+    elif action == "playlist-play-index":
+        if len(parts) != 2 or not re.match(r'^[0-9]+$', parts[1]):
+            return False, "playlist-play-index needs a non-negative integer index"
     elif action == "eq-custom":
         if len(parts) < 3 or len(parts[1:]) % 2 != 0:
             return False, "eq-custom needs frequency/gain pairs"
@@ -1256,6 +1259,9 @@ def _validate_cmd(cmd_str):
     elif action == "sleep":
         if len(parts) != 2 or not (parts[1] in ("cancel", "off") or re.match(r'^[0-9]+$', parts[1])):
             return False, "sleep needs minutes or cancel"
+    elif action in ("stats", "history-stats"):
+        if len(parts) != 1:
+            return False, f"{action} does not take arguments"
     
     return True, None
 
@@ -1355,6 +1361,9 @@ def handle_cmd(cmd_str):
         if len(parts) > 1:
             try:
                 idx = int(parts[1])
+                queue = get_full_state().get("queue", [])
+                if idx < 0 or idx >= len(queue):
+                    return _err(E.INVALID_ARGS, "playlist index out of range")
                 mpv_set("playlist-pos", idx)
                 return {"ok": True, "msg": f"playing track {idx + 1}"}
             except ValueError:
@@ -1890,6 +1899,7 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             logger.error(f"Failed to start search subprocess: {e}")
             try:
                 self.wfile.write(f"data: {json.dumps({'error': 'search_failed', 'msg': str(e)})}\n\n".encode())
+                self.wfile.write(f"event: done\ndata: {json.dumps({'count': 0})}\n\n".encode())
                 self.wfile.flush()
             except Exception:
                 pass

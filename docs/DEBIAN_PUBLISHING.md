@@ -24,8 +24,8 @@ sudo apt-get install devscripts debhelper dh-make build-essential lintian
 
 ```bash
 # 1. Create working directory
-mkdir -p ~/debian-packages/mox-7.2.2
-cd ~/debian-packages/mox-7.2.2
+mkdir -p ~/debian-packages/mox-cli-7.2.2
+cd ~/debian-packages/mox-cli-7.2.2
 
 # 2. Copy your source
 cp -r /path/to/mox/* .
@@ -46,22 +46,22 @@ Update `debian/rules` for new structure:
 
 override_dh_auto_install:
 	# Create directories
-	mkdir -p debian/mox/usr/share/mox
-	mkdir -p debian/mox/usr/bin
+	mkdir -p debian/mox-cli/usr/share/mox
+	mkdir -p debian/mox-cli/usr/bin
 	
 	# Install source files
-	cp -r src/* debian/mox/usr/share/mox/
-	cp -r scripts debian/mox/usr/share/mox/
-	cp -r tests debian/mox/usr/share/mox/
-	cp -r docs debian/mox/usr/share/mox/
+	cp -r src debian/mox-cli/usr/share/mox/
+	cp -r scripts debian/mox-cli/usr/share/mox/
+	cp -r tests debian/mox-cli/usr/share/mox/
+	cp -r docs debian/mox-cli/usr/share/mox/
 	
 	# Install data files
-	cp VERSION LICENSE README.md debian/mox/usr/share/mox/
+	cp VERSION LICENSE README.md debian/mox-cli/usr/share/mox/
 	
 	# Make scripts executable
-	chmod +x debian/mox/usr/share/mox/src/mox.sh
-	chmod +x debian/mox/usr/share/mox/src/music_ui_server.py
-	chmod +x debian/mox/usr/share/mox/scripts/install.sh
+	chmod +x debian/mox-cli/usr/share/mox/src/mox.sh
+	chmod +x debian/mox-cli/usr/share/mox/src/music_ui_server.py
+	chmod +x debian/mox-cli/usr/share/mox/scripts/install.sh
 
 override_dh_auto_clean:
 	dh_clean
@@ -74,12 +74,12 @@ override_dh_auto_clean:
 debuild -us -uc
 
 # 2. Check package quality
-lintian ../mox_7.2.2-1_all.deb
+lintian ../mox-cli_7.2.2-1_all.deb
 
 # 3. Test installation
-sudo dpkg -i ../mox_7.2.2-1_all.deb
+sudo dpkg -i ../mox-cli_7.2.2-1_all.deb
 mox --help
-sudo dpkg -r mox
+sudo dpkg -r mox-cli
 ```
 
 ### Step 5: Create APT Repository
@@ -89,7 +89,7 @@ sudo dpkg -r mox
 mkdir -p ~/apt-repo/{dists/stable/main/binary-amd64,pool/main}
 
 # 2. Copy package
-cp ../mox_7.2.2-1_all.deb ~/apt-repo/pool/main/
+cp ../mox-cli_7.2.2-1_all.deb ~/apt-repo/pool/main/
 
 # 3. Create Packages file
 cd ~/apt-repo
@@ -152,7 +152,7 @@ curl -s https://yourusername.github.io/apt-repo/key.gpg | sudo apt-key add -
 
 # 3. Update and install
 sudo apt-get update
-sudo apt-get install mox
+sudo apt-get install mox-cli
 ```
 
 ## Method 2: Submit to Official Debian
@@ -191,7 +191,7 @@ reportbug wnpp
 debuild -S
 
 # 2. Upload to PPA
-dput ppa:yourusername/mox ../mox_7.2.2-1_source.changes
+dput ppa:yourusername/mox ../mox-cli_7.2.2-1_source.changes
 
 # 3. Wait for build completion
 ```
@@ -202,7 +202,7 @@ dput ppa:yourusername/mox ../mox_7.2.2-1_source.changes
 # Add PPA
 sudo add-apt-repository ppa:yourusername/mox
 sudo apt-get update
-sudo apt-get install mox
+sudo apt-get install mox-cli
 ```
 
 ## Automated Building with GitHub Actions
@@ -255,10 +255,10 @@ jobs:
 
 ```bash
 # Check package contents
-dpkg-deb -c mox_7.2.2-1_all.deb
+dpkg-deb -c mox-cli_7.2.2-1_all.deb
 
 # Check package info
-dpkg-deb -I mox_7.2.2-1_all.deb
+dpkg-deb -I mox-cli_7.2.2-1_all.deb
 
 # Test installation in clean environment
 docker run -it ubuntu:22.04

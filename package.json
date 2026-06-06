@@ -18,7 +18,7 @@
     "test:performance": "./tests/test-performance.sh",
     "test:api": "python3 ./tests/test-api.py",
     "test:edge-cases": "./tests/test-edge-cases.sh",
-    "prepack": "npm run test",
+    "prepack": "node ./scripts/prepack.js",
     "start": "./mox help",
     "lint": "shellcheck src/mox.sh src/lib/*.sh || true",
     "security": "npm run test:security"
@@ -74,8 +74,7 @@
   },
   "os": [
     "darwin",
-    "linux",
-    "win32"
+    "linux"
   ],
   "cpu": [
     "x64",

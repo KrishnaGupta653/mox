@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [7.2.2] - 2026-05-27
 
+### Fixed
+- **CI/CD Pipeline**: Fixed GitHub Actions artifact versions (v4 for upload/download)
+- **CI/CD Pipeline**: Fixed release-assets job dependency and conditions
+- **Test Scripts**: Removed invalid `local` keyword usage outside functions
+- **Homebrew Formula**: Fixed `rescue nil` error handling in post_install
+- **Homebrew Formula**: Updated version to 7.2.2 for consistency
+- **Version Sync**: Synchronized all version references across documentation
+
+### Changed
+- **Release Process**: Improved artifact handling in CI/CD pipeline
+- **Test Suite**: Enhanced compatibility with strict shell modes
+
+## [6.1.1] - 2026-03-25
+
+### Fixed
+- **Version Management**: Stable release with WSL compatibility as the new latest version
+- **Package Sync**: Ensure all platforms have the same reliable WSL-compatible version
+- **Rollback Integration**: Incorporates stable v6.0.8 features as the current latest
+
+## [6.0.8] - 2026-03-25
+
+### Added
+- **WSL Support**: Full Windows Subsystem for Linux compatibility
+- **Cross-platform Detection**: Automatic WSL and Windows environment detection
+- **Audio Configuration**: WSL-specific audio setup guidance and PulseAudio instructions
+- **Windows Compatibility**: Added win32 OS support for WSL installations
+
+### Fixed
+- **Installation Instructions**: WSL-specific dependency installation commands
+- **Error Messages**: Platform-aware error messages and setup guidance
+
+## [6.0.7] - 2026-03-25
+
+### Fixed
+- **Homebrew Installation**: Fixed post-install script and file structure for proper Homebrew installation
+- **Path Resolution**: Improved MOX_LIBEXEC_DIR and MOX_PACKAGE_DIR environment variables for Homebrew
+- **File Permissions**: Ensured executable permissions are set correctly during Homebrew install
+
+## [6.0.6] - 2026-03-25
+
+### Fixed
+- **npm Installation**: Complete fix for path resolution in `mox uxi` command
+- **Web UI Server**: Enhanced path detection for all installation methods (npm, Homebrew, local)
+- **Cross-shell Compatibility**: Fixed script directory detection for both bash and zsh
+
+## [6.0.5] - 2026-03-25
+
+### Fixed
+- **npm Installation**: Fixed path resolution for `mox uxi` command in npm global installations
+- **Web UI Server**: Added robust path detection for `music_ui_server.py` in npm package structure
+
+## [6.0.0] - 2026-03-23
+
 ### Added
 - **Package Management**: Added npm and Homebrew support for easy installation
 - **Dependency Validation**: Automatic checking and guidance for missing dependencies

@@ -17,12 +17,12 @@ cd tests && ./test.sh
 
 # 3. Check package contents
 npm pack
-tar -tzf mox-7.2.2.tgz
+tar -tzf mox-cli-7.2.2.tgz
 
 # 4. Test local installation
-npm install -g ./mox-7.2.2.tgz
+npm install -g ./mox-cli-7.2.2.tgz
 mox --help
-npm uninstall -g mox
+npm uninstall -g mox-cli
 ```
 
 ## Publishing Steps
@@ -40,30 +40,30 @@ cat package.json
 npm publish
 
 # 4. Verify publication
-npm info mox
+npm info mox-cli
 ```
 
 ### Updating Versions
 
 ```bash
 # 1. Update version (patch/minor/major)
-npm version patch  # 7.2.2 → 6.0.1
-npm version minor  # 7.2.2 → 6.1.0
-npm version major  # 7.2.2 → 7.0.0
+npm version patch  # 7.2.2 -> 7.2.3
+npm version minor  # 7.2.2 -> 7.3.0
+npm version major  # 7.2.2 -> 8.0.0
 
 # 2. Update VERSION file to match
-echo "6.0.1" > VERSION
+echo "7.2.3" > VERSION
 
 # 3. Commit changes
 git add .
-git commit -m "Bump version to 6.0.1"
+git commit -m "Bump version to 7.2.3"
 git push
 
 # 4. Publish
 npm publish
 
 # 5. Create Git tag
-git tag v6.0.1
+git tag v7.2.3
 git push --tags
 ```
 
@@ -71,10 +71,10 @@ git push --tags
 
 ```bash
 # Global installation (recommended)
-npm install -g mox
+npm install -g mox-cli
 
 # Local installation
-npm install mox
+npm install mox-cli
 npx mox --help
 ```
 
@@ -91,13 +91,13 @@ npx mox --help
 
 ```bash
 # Check if package exists
-npm view mox
+npm view mox-cli
 
 # Check package contents
 npm pack --dry-run
 
 # Test installation
-npm install -g mox@latest
+npm install -g mox-cli@latest
 ```
 
 ## Automated Publishing with GitHub Actions
