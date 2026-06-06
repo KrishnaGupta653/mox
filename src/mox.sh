@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # ============================================================
-#  mox — terminal music CLI  (hardened build v7.2.2)
+#  mox — terminal music CLI  (hardened build v8.0.0)
 #  All state lives in ~/music_system/
 #
 #  v5 changes over v4:

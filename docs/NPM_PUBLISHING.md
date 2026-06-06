@@ -17,10 +17,10 @@ cd tests && ./test.sh
 
 # 3. Check package contents
 npm pack
-tar -tzf mox-cli-7.2.2.tgz
+tar -tzf mox-cli-8.0.0.tgz
 
 # 4. Test local installation
-npm install -g ./mox-cli-7.2.2.tgz
+npm install -g ./mox-cli-8.0.0.tgz
 mox --help
 npm uninstall -g mox-cli
 ```
@@ -105,16 +105,16 @@ npm install -g mox-cli@latest
 The CI workflow in `.github/workflows/ci.yml` can be extended for automatic publishing:
 
 ```yaml
-  publish-npm:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release'
-    steps:
+publish-npm:
+  needs: test
+  runs-on: ubuntu-latest
+  if: github.event_name == 'release'
+  steps:
     - uses: actions/checkout@v4
     - uses: actions/setup-node@v3
       with:
-        node-version: '18'
-        registry-url: 'https://registry.npmjs.org'
+        node-version: "18"
+        registry-url: "https://registry.npmjs.org"
     - run: npm publish
       env:
         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
