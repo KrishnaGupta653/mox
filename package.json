@@ -1,12 +1,15 @@
 {
   "name": "mox-cli",
-  "version": "8.0.0",
+  "version": "8.0.1",
   "description": "Terminal music CLI - A powerful command-line music player with web UI, mpv backend, and extensive features",
-  "main": "mox",  "engines": {
-    "node": ">=18.0.0",
-    "python": ">=3.10"
-  },  "bin": {
+  "main": "mox",
+  "bin": {
     "mox": "mox"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=6.0.0",
+    "python": ">=3.10"
   },
   "scripts": {
     "postinstall": "./scripts/install.sh",
@@ -69,10 +72,6 @@
   "funding": {
     "type": "github",
     "url": "https://github.com/sponsors/KrishnaGupta653"
-  },
-  "engines": {
-    "node": ">=14.0.0",
-    "npm": ">=6.0.0"
   },
   "os": [
     "darwin",

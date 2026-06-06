@@ -182,8 +182,16 @@ if [ ${#OPTIONAL_DEPS[@]} -gt 0 ]; then
 fi
 
 # Make scripts executable
-chmod +x "$SCRIPT_DIR/../src/mox.sh"
-chmod +x "$SCRIPT_DIR/../src/music_ui_server.py"
+# Detect if we're running from Homebrew (install.sh is in libexec/)
+if [[ "$SCRIPT_DIR" == */libexec ]]; then
+    # Homebrew installation - scripts are in libexec/src
+    chmod +x "$SCRIPT_DIR/src/mox.sh" 2>/dev/null || true
+    chmod +x "$SCRIPT_DIR/src/music_ui_server.py" 2>/dev/null || true
+else
+    # Normal installation - scripts are in ../src relative to scripts/
+    chmod +x "$SCRIPT_DIR/../src/mox.sh" 2>/dev/null || true
+    chmod +x "$SCRIPT_DIR/../src/music_ui_server.py" 2>/dev/null || true
+fi
 
 echo ""
 echo "✅ Installation completed successfully!"
