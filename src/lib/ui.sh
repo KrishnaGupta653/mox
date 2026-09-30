@@ -55,18 +55,13 @@ _clean_url() {
 }
 
 # ── do_version ──────────────────────────────────────────────────
-do_version() {
-  local script_dir version=""
-
-  # Get the directory containing this script (compatible with both bash and zsh)
-  if [[ -n "${BASH_SOURCE:-}" ]]; then
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  else
-    script_dir="$(cd "$(dirname "$0")" && pwd)"
-  fi
+_mox_version() {
+  local version=""
+  # Set by mox.sh; $0 inside a zsh function is the function name, not the script path
+  local script_dir="${_MOX_SRC_DIR:-$PWD}"
 
   # Priority 1: Check MOX_PACKAGE_DIR (set by npm wrapper script)
-  if [[ -n "$MOX_PACKAGE_DIR" ]]; then
+  if [[ -n "${MOX_PACKAGE_DIR:-}" ]]; then
     if [[ -f "$MOX_PACKAGE_DIR/package.json" ]] && command -v jq >/dev/null 2>&1; then
       version=$(jq -r '.version // empty' "$MOX_PACKAGE_DIR/package.json" 2>/dev/null)
     fi
@@ -112,10 +107,12 @@ do_version() {
     version=$(git describe --tags --exact-match 2>/dev/null || git describe --tags 2>/dev/null)
   fi
 
-  # Fallback
   [[ -z "$version" ]] && version="unknown"
+  echo "${version#v}"
+}
 
-  echo "mox ${version}"
+do_version() {
+  echo "mox $(_mox_version)"
   echo "Terminal music CLI with web UI and extensive features"
   echo "Homepage: https://github.com/KrishnaGupta653/mox"
 }
@@ -249,7 +246,7 @@ do_bar() {
       case "$key" in
         q|Q|$'\e') break ;;
         p) _silent '{"command":["cycle","pause"]}' ;;
-        n) _silent '{"command":["playlist-next"]}'; sleep 0.4; (_autodj_check) & disown $! 2>/dev/null ;;
+        n) _silent '{"command":["playlist-next"]}'; sleep 0.4; (_autodj_check) &! ;;
         b) _silent '{"command":["playlist-prev"]}'; sleep 0.4 ;;
         .) _silent '{"command":["seek","10","relative"]}' ;;
         ,) _silent '{"command":["seek","-10","relative"]}' ;;
@@ -608,10 +605,9 @@ do_uxi() {
 
   # Start bridge server in background
   _info "starting uxi bridge server on port $UXI_PORT…"
-  UXI_AUTH="$UXI_AUTH" "$py3" "$server_path" "$UXI_PORT" > "$DATA_DIR/uxi_server.log" 2>&1 &
+  "$py3" "$server_path" "$UXI_PORT" > "$DATA_DIR/uxi_server.log" 2>&1 &!
   local srv_pid=$!
   echo "$srv_pid" > "$UXI_PID_FILE"
-  disown "$srv_pid" 2>/dev/null
 
   # Wait briefly for server to start
   local tries=0
@@ -630,7 +626,6 @@ do_uxi() {
   fi
 
   _ok "uxi server running → http://127.0.0.1:${UXI_PORT}  (pid $srv_pid)"
-  [[ "$UXI_AUTH" == "1" ]] && _info "PIN is printed in: $DATA_DIR/uxi_server.log"
   _open_browser "http://127.0.0.1:${UXI_PORT}"
 }
 
@@ -654,47 +649,40 @@ _open_browser() {
 
 # ── do_uxi_stop ─────────────────────────────────────────────────
 do_uxi_stop() {
-  local killed=0
-  
+  local killed=0 pidfile_pid="" proc_info=""
+
   # First, try to stop via PID file
   if [[ -f "$UXI_PID_FILE" ]]; then
     local pid; pid=$(cat "$UXI_PID_FILE" 2>/dev/null)
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-      kill "$pid" 2>/dev/null && killed=$((killed + 1))
+      kill "$pid" 2>/dev/null && { killed=$((killed + 1)); pidfile_pid="$pid"; }
     fi
     rm -f "$UXI_PID_FILE"
   fi
-  
-  # Kill all Python processes on ports 7700-7799 (mox uxi ports)
+
+  # Kill orphaned music_ui_server listeners on ports 7700-7799 (never other programs)
   if [[ "$OS" == "mac" ]]; then
-    # macOS: use lsof to find all processes on 770* ports at once
     while IFS= read -r pid; do
-      [[ -z "$pid" ]] && continue
-      # Check if it's a Python process or has music_ui_server in command line
-      local proc_info
-      proc_info=$(ps -p "$pid" -o comm=,args= 2>/dev/null)
-      if [[ -n "$proc_info" ]] && echo "$proc_info" | grep -q -iE '(python|music_ui_server)'; then
+      [[ -z "$pid" || "$pid" == "$pidfile_pid" ]] && continue
+      proc_info=$(ps -p "$pid" -o args= 2>/dev/null)
+      if [[ "$proc_info" == *music_ui_server* ]]; then
         kill -9 "$pid" 2>/dev/null && killed=$((killed + 1))
       fi
-    done < <(lsof -ti :7700-7799 2>/dev/null)
+    done < <(lsof -ti tcp:7700-7799 -sTCP:LISTEN 2>/dev/null)
   else
-    # Linux: use ss or netstat
     if command -v ss >/dev/null 2>&1; then
-      # Use ss (modern Linux)
       while IFS= read -r pid; do
-        [[ -z "$pid" ]] && continue
-        local proc_info
-        proc_info=$(ps -p "$pid" -o comm=,args= 2>/dev/null)
-        if [[ -n "$proc_info" ]] && echo "$proc_info" | grep -q -iE '(python|music_ui_server)'; then
+        [[ -z "$pid" || "$pid" == "$pidfile_pid" ]] && continue
+        proc_info=$(ps -p "$pid" -o args= 2>/dev/null)
+        if [[ "$proc_info" == *music_ui_server* ]]; then
           kill -9 "$pid" 2>/dev/null && killed=$((killed + 1))
         fi
-      done < <(ss -tlnp 2>/dev/null | awk '/:(770[0-9]{2})\s/ {print $6}' | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u)
+      done < <(ss -tlnp 2>/dev/null | awk '$4 ~ /:77[0-9][0-9]$/ {print $NF}' | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u)
     else
-      # Fallback: find all python processes with port 770* in command line
       while IFS= read -r pid; do
-        [[ -z "$pid" ]] && continue
+        [[ -z "$pid" || "$pid" == "$pidfile_pid" ]] && continue
         kill -9 "$pid" 2>/dev/null && killed=$((killed + 1))
-      done < <(ps aux | grep -E '(python|music_ui_server).*770[0-9]{2}' | grep -v grep | awk '{print $2}')
+      done < <(ps ax -o pid=,args= | awk '/music_ui_server/ && / 77[0-9][0-9]$/ && !/awk/ {print $1}')
     fi
   fi
   
@@ -946,7 +934,7 @@ do_doctor() {
   _ensure_bin FFPROBE ffprobe
 
   echo ""
-  echo "  ${C}mox doctor — system diagnostics (v7.2.2)${X}"
+  echo "  ${C}mox doctor — system diagnostics (v$(_mox_version))${X}"
   echo "  $(date)"
   echo ""
   echo "  ${W}Dependencies:${X}"
@@ -1456,7 +1444,7 @@ COMPLETIONS
 do_help() {
   cat <<EOF
 
-  ${C}mox — terminal music CLI${X}   (v7.2.2)
+  ${C}mox — terminal music CLI${X}   (v$(_mox_version))
   data: ~/music_system/   config: $CONFIG_FILE
   log:  $MPV_LOG
 

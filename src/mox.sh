@@ -1,6 +1,6 @@
 #!/usr/bin/env zsh
 # ============================================================
-#  mox — terminal music CLI  (hardened build v8.0.1)
+#  mox — terminal music CLI  (version: see VERSION)
 #  All state lives in ~/music_system/
 #
 #  v5 changes over v4:
@@ -99,7 +99,6 @@ CROSSFADE_SECS=0           # crossfade duration between tracks (0=off)
 BAR_REFRESH_MS=500         # progress bar refresh interval
 M_UPDATE_URL=""            # self-update URL (empty=disabled)
 M_UPDATE_SHA256=""         # expected SHA256 for self-update
-UXI_AUTH=0                 # 1 = require web UI PIN on first visit
 UXI_PORT="${UXI_PORT:-7700}"
 
 # ── binary paths (resolved lazily via _ensure_bin) ─────────────
@@ -117,13 +116,19 @@ FFPROBE="${FFPROBE:-}"
 # ── load user config ──────────────────────────────────────────
 
 # ── Load library modules ────────────────────────────────────────────────────
-_MOX_LIB_DIR="$(cd "$(dirname "${(%):-%N}")" && pwd)/lib"
+_MOX_SRC_DIR="$(cd "$(dirname "${(%):-%N}")" && pwd)"
+_MOX_LIB_DIR="$_MOX_SRC_DIR/lib"
 MOX_LIB_ONLY=1
 for _mox_lib in core lock ipc search playback queue audio history playlist lyrics schedule ui; do
   # shellcheck source=/dev/null
   source "$_MOX_LIB_DIR/${_mox_lib}.sh" || { echo "Error: failed to load lib/${_mox_lib}.sh" >&2; exit 1; }
 done
 unset MOX_LIB_ONLY _mox_lib _MOX_LIB_DIR
+
+trap '_unlock "$LOCK_FILE" 2>/dev/null; _unlock "$HISTORY_LOCK" 2>/dev/null' EXIT
+
+# Create state dirs and seed files before anything reads them
+_bootstrap
 
 # Load and validate user configuration after libs are loaded
 _load_config
@@ -150,6 +155,10 @@ fi
 
 case "$1" in
   --version|-V|version) do_version;                   exit 0 ;;
+  # Explicit forms: everything after the subcommand is the query, never a command or flag
+  play)     shift; [ $# -eq 0 ] && _die "usage: mox play <query|url|file>";     do_play "$*";     exit $? ;;
+  add)      shift; [ $# -eq 0 ] && _die "usage: mox add <query|url|file>";      do_add "$*";      exit $? ;;
+  add-next) shift; [ $# -eq 0 ] && _die "usage: mox add-next <query|url|file>"; do_add_next "$*"; exit $? ;;
   pause|pp)            do_pause;                   exit 0 ;;
   next|mn)             do_next;                    exit 0 ;;
   prev|mb)             do_prev;                    exit 0 ;;
@@ -278,6 +287,8 @@ if [ $FLAG_ADD -eq 1 ]; then
 else
   do_play "$QUERY"
 fi
+_rc=$?
 
 [ $FLAG_HP -eq 1 ] && sleep 0.4 && do_hp
 [ $FLAG_SP -eq 1 ] && sleep 0.4 && do_sp
+exit $_rc

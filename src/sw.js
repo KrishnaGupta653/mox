@@ -13,7 +13,7 @@
  * Note: API routes (/api/*, /sw.js itself) are always network-only.
  */
 
-const CACHE_NAME = 'mox-v2';
+const CACHE_NAME = 'mox-v3';
 
 const PRECACHE_URLS = [
   '/',
@@ -71,6 +71,21 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   if (!event.request.url.startsWith(self.location.origin)) return;
   if (isNetworkOnly(event.request.url)) return;
+
+  // Pages are network-first: the server issues a fresh CSRF cookie with the
+  // HTML on every start, and a cached page would keep a dead token (403s).
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).then(response => {
+        if (response && response.status === 200) {
+          const toCache = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put('/', toCache));
+        }
+        return response;
+      }).catch(() => caches.match('/'))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then(cached => {

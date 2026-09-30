@@ -15,7 +15,7 @@ permissions:
   checks: write
 
 env:
-  NODE_VERSION: '18'
+  NODE_VERSION: '24'
   PYTHON_VERSION: '3.10'
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -137,6 +137,22 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: 'https://registry.npmjs.org'
+
+      # Homebrew builds its URL from VERSION and npm publishes package.json's version,
+      # so a mismatched tag would ship the wrong (or an already-published) version.
+      # Runs on every push so drift is caught on main, before anyone tags.
+      - name: Check VERSION, package.json (and tag) agree
+        run: |
+          FILE_VERSION="$(tr -d '[:space:]' < VERSION)"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$FILE_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::VERSION (${FILE_VERSION}) and package.json (${PKG_VERSION}) differ - run ./release.sh X.Y.Z"
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" == refs/tags/v* ]] && [ "${GITHUB_REF_NAME#v}" != "$FILE_VERSION" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match VERSION (${FILE_VERSION})"
+            exit 1
+          fi
       
       - name: Validate package.json
         run: |
@@ -184,7 +200,8 @@ jobs:
           
           # Calculate SHA256 for the release tarball
           TARBALL_URL="https://github.com/KrishnaGupta653/mox/archive/v${VERSION}.tar.gz"
-          SHA256=$(curl -sL "$TARBALL_URL" | shasum -a 256 | cut -d' ' -f1)
+          curl -fsSL "$TARBALL_URL" -o release.tar.gz
+          SHA256=$(shasum -a 256 release.tar.gz | cut -d' ' -f1)
           
           # Update the existing formula file
           sed -i "s|archive/v[0-9]\+\.[0-9]\+\.[0-9]\+\.tar\.gz|archive/v${VERSION}.tar.gz|g" packaging/homebrew/mox-cli.rb
@@ -274,7 +291,7 @@ jobs:
           EOF
           
           # Install files
-          cp -r src "${PKG_NAME}/usr/share/mox/"
+          cp -r src VERSION "${PKG_NAME}/usr/share/mox/"
           cp README.md LICENSE "${PKG_NAME}/usr/share/doc/mox-cli/"
           
           cat > "${PKG_NAME}/usr/bin/mox" << EOF
@@ -302,7 +319,12 @@ jobs:
     name: Publish to npm
     needs: [test, build]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Tag pushes only: a manually published GitHub Release would re-run this and fail on the duplicate version.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    # Trusted publishing (OIDC): npm trusts this repo + ci.yml, so no NPM_TOKEN is needed. Requires npm >= 11.5.1.
+    permissions:
+      contents: read
+      id-token: write
     
     steps:
       - uses: actions/checkout@v4
@@ -314,9 +336,9 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       
       - name: Publish to npm
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm --version
+          npm publish
 
   # ============================================================================
   # RELEASE ASSETS
@@ -357,7 +379,7 @@ jobs:
         if: needs.publish-npm.result == 'success' && needs.release-assets.result == 'success'
         run: |
           echo "🎉 Successfully released mox CLI!"
-          echo "📦 npm: https://www.npmjs.com/package/mox"
+          echo "📦 npm: https://www.npmjs.com/package/mox-cli"
           echo "🍺 Homebrew formula generated"
           echo "📋 Debian package created"
       

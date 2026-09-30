@@ -35,8 +35,7 @@ _log_history() {
     printf '%s\t%s\t%s\n' "$(date '+%Y-%m-%d %H:%M')" "$title" "$url" >> "$HISTORY_FILE"
   fi
 
-  _scrobble "$title" "$url" &
-  disown $! 2>/dev/null
+  _scrobble "$title" "$url" &!
 }
 
 # ── do_like ─────────────────────────────────────────────────────

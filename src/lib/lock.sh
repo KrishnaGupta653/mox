@@ -30,7 +30,7 @@ _lock() {
       _MOX_LOCK_FDS[$lf]="$fd"
       return 0
     fi
-    eval "exec ${fd}>&-" 2>/dev/null
+    exec {fd}>&-
     return 1
   fi
 
@@ -41,29 +41,26 @@ _lock() {
       return 0
     fi
 
-    # Lock held — check if stale
-    if [[ $(date +%s) -gt $deadline ]]; then
-      if [[ $steal_count -lt $MAX_STEALS && -f "$lf" ]]; then
-        local dead_pid; dead_pid=$(cat "$lf" 2>/dev/null)
-        if [[ -n "$dead_pid" ]] && ! kill -0 "$dead_pid" 2>/dev/null; then
-          # PID is dead. Two-phase steal: rename PID file first (atomic claim),
-          # then rmdir only if rename succeeded — avoids TOCTOU race.
-          local steal_src="${lf}.steal.$$"
-          local steal_claim="${lf}.steal"
-          printf '%s:%s\n' "$$" "$(date +%s)" > "$steal_src" 2>/dev/null || return 1
-          if ln "$steal_src" "$steal_claim" 2>/dev/null; then
-            rmdir "${lf}.d" 2>/dev/null
-            rm -f "$lf" "$steal_claim"
-            rm -f "$steal_src"
-            steal_count=$(( steal_count + 1 ))
-            deadline=$(( $(date +%s) + timeout ))
-            continue  # immediately retry mkdir
-          fi
+    # Lock held — steal immediately if the holder's PID is dead
+    if [[ $steal_count -lt $MAX_STEALS && -f "$lf" ]]; then
+      local dead_pid; dead_pid=$(cat "$lf" 2>/dev/null)
+      if [[ -n "$dead_pid" ]] && ! kill -0 "$dead_pid" 2>/dev/null; then
+        # Two-phase steal: hard-link a claim file first (atomic),
+        # then rmdir only if the claim succeeded — avoids TOCTOU race.
+        local steal_src="${lf}.steal.$$"
+        local steal_claim="${lf}.steal"
+        printf '%s:%s\n' "$$" "$(date +%s)" > "$steal_src" 2>/dev/null || return 1
+        if ln "$steal_src" "$steal_claim" 2>/dev/null; then
+          rmdir "${lf}.d" 2>/dev/null
+          rm -f "$lf" "$steal_claim"
           rm -f "$steal_src"
+          steal_count=$(( steal_count + 1 ))
+          continue  # immediately retry mkdir
         fi
+        rm -f "$steal_src"
       fi
-      return 1  # live lock or max steals exceeded
     fi
+    [[ $(date +%s) -gt $deadline ]] && return 1  # live lock or max steals exceeded
     sleep 0.05
   done
 }
@@ -75,7 +72,8 @@ _unlock() {
     local fd="${_MOX_LOCK_FDS[$lf]}"
     rm -f "$lf"
     flock -u "$fd" 2>/dev/null
-    eval "exec ${fd}>&-" 2>/dev/null
+    # {fd}>&- form: zsh parses a literal "15>&-" as a command named 15, and exec of it kills mox
+    exec {fd}>&-
     unset "_MOX_LOCK_FDS[$lf]"
     return
   fi

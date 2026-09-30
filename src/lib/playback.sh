@@ -34,8 +34,7 @@ do_play() {
   _log_history "${title:-unknown}" "$(_clean_url "$url")"
   _queue_snapshot
   # v5-R: auto-DJ check after play (background, non-blocking)
-  (_autodj_check) &
-  disown $! 2>/dev/null
+  (_autodj_check) &!
 }
 
 # ── do_replay ───────────────────────────────────────────────────
@@ -167,8 +166,7 @@ do_next() {
   [[ -z "$title" || "$title" == *"watch?v="* ]] && { sleep 1; title=$(_get media-title); }
   [[ -n "$title" ]] && _notify_track "$title"
   _ok "⏭  ${title:-end of queue}"
-  (_autodj_check) &
-  disown $! 2>/dev/null
+  (_autodj_check) &!
 }
 
 # ── do_prev ─────────────────────────────────────────────────────
@@ -366,6 +364,7 @@ do_speed() {
 # ── do_hp ───────────────────────────────────────────────────────
 do_hp() {
   _need
+  _detect_audio_devices
   [[ -z "${AUDIO_DEVICE_HEADPHONES:-}" ]] && { _err "headphone device not configured — set AUDIO_DEVICE_HEADPHONES in $CONFIG_FILE"; return 1; }
   _silent "{\"command\":[\"set_property\",\"audio-device\",\"$AUDIO_DEVICE_HEADPHONES\"]}"
   _ok "🎧 headphones"
@@ -374,6 +373,7 @@ do_hp() {
 # ── do_sp ───────────────────────────────────────────────────────
 do_sp() {
   _need
+  _detect_audio_devices
   [[ -z "${AUDIO_DEVICE_SPEAKERS:-}" ]] && { _err "speaker device not configured — set AUDIO_DEVICE_SPEAKERS in $CONFIG_FILE"; return 1; }
   _silent "{\"command\":[\"set_property\",\"audio-device\",\"$AUDIO_DEVICE_SPEAKERS\"]}"
   _ok "🔊 speakers"

@@ -24,10 +24,9 @@ do_sleep() {
       [[ -n "$pid" ]] && kill "$pid" 2>/dev/null
     fi
     rm -f "$timer_file"
-  ) &
+  ) &!
   local tpid=$!
   echo $tpid > "$timer_file"
-  disown $tpid
   _ok "⏲  sleep timer set: ${mins} minute(s)  (m sleep cancel to abort)"
 }
 

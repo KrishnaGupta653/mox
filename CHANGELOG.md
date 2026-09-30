@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.2] - 2026-10-01
+
+### Fixed
+- **`mox start`**: works again on a fresh install (state dirs and lock files are created before first use)
+- **Linux**: every locked command (`start`, `play`, …) exited with code 127 after running; the lock file is now closed correctly
+- **Stale locks**: a lock left by a crashed mox is taken over immediately instead of waiting for the timeout
+- **`mox eq`**: presets `bass`, `treble`, `vocal`, `loud` crashed with "parameter not set"
+- **`mox hp` / `mox sp` / `mox devices`**: audio devices are detected on demand on macOS
+- **Background jobs**: `mox sleep`, autodj, scrobbling and playlist jobs no longer print "job not found" or return wrong exit codes
+- **`mox uxi-stop`**: only stops mox's own web UI server, and no longer hangs the server on SIGTERM
+- **Web UI**: "play" / "add" / "add next" queries such as "stop" are played as searches instead of run as commands; volume 0 is shown correctly; the page refreshes after an update instead of serving a stale cached copy
+- **Web UI security**: requests with a foreign `Host` header are rejected (DNS-rebinding protection); HTML attributes are escaped
+- **Version**: `mox --version`, `mox help` and `mox doctor` all read the `VERSION` file (Homebrew installs showed "unknown")
+- **Installer**: missing system dependencies are reported as a warning instead of failing the npm install
+
+### Removed
+- **Web UI PIN** (`UXI_AUTH`): the web UI only listens on 127.0.0.1 and is protected by a per-session CSRF token
+
+### Changed
+- **npm publishing**: CI publishes via npm trusted publishing (OIDC) instead of a stored `NPM_TOKEN`
+- **CI**: releases fail early if the tag doesn't match `VERSION` and `package.json`; the Homebrew checksum step fails on a bad download instead of hashing an error page
+- **Tests**: `tests/test.sh` now starts and stops a real daemon on a fresh state dir
+
 ## [7.2.2] - 2026-05-27
 
 ### Fixed

@@ -15,7 +15,7 @@ _load_config() {
     YTDLP_MAX_AGE_DAYS LASTFM_API_KEY YOUTUBE_API_KEY INVIDIOUS_HOST
     LOCAL_MUSIC_DIR AUTODJ_ENABLED LYRICS_ENABLED AUTO_RESTART_DAEMON
     NOTIFY_ENABLED CROSSFADE_SECS BAR_REFRESH_MS M_UPDATE_URL M_UPDATE_SHA256
-    UXI_AUTH YTDLP MPV FZF SOCAT JQ CURL CHAFA FFPROBE
+    YTDLP MPV FZF SOCAT JQ CURL CHAFA FFPROBE
   )
 
   local line key value allowed allowed_key
@@ -165,7 +165,6 @@ _bootstrap() {
 # BAR_REFRESH_MS=500                # progress bar refresh interval
 # M_UPDATE_URL=                     # self-update URL (empty=disabled)
 # M_UPDATE_SHA256=                  # expected SHA256 for self-update
-# UXI_AUTH=0                        # 1 = require a startup PIN for web UI
 EOF
   fi
 }
@@ -299,9 +298,8 @@ _start() {
     --demuxer-max-bytes=50MiB \
     --prefetch-playlist=yes \
     --save-position-on-quit=no \
-    2>>"$MPV_LOG" &
+    </dev/null >/dev/null 2>>"$MPV_LOG" &!
   local mpv_pid=$!
-  disown $mpv_pid 2>/dev/null || true
   echo $mpv_pid > "$MPV_PID_FILE"
   for i in $(seq 1 30); do
     sleep 0.3

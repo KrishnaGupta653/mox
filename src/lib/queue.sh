@@ -14,7 +14,9 @@ _queue_snapshot() {
   local tmpf; tmpf=$(mktemp "$DATA_DIR/snap.XXXXXX")
   echo "$urls" > "$tmpf" && mv "$tmpf" "$QUEUE_SNAPSHOT" || rm -f "$tmpf"
   # Phase 2.5: auto-save to autosave_queue.m3u when enabled
-  [[ -f "$QUEUE_SAVE_AUTO_FILE" ]] && cp "$QUEUE_SNAPSHOT" "$AUTOSAVE_QUEUE_FILE" 2>/dev/null
+  if [[ -f "$QUEUE_SAVE_AUTO_FILE" ]]; then
+    cp "$QUEUE_SNAPSHOT" "$AUTOSAVE_QUEUE_FILE" 2>/dev/null
+  fi
 }
 
 # ── _autodj_check ───────────────────────────────────────────────

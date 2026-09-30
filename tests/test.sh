@@ -81,6 +81,12 @@ if ! python3 -c "import json; json.load(open('$PROJECT_ROOT/package.json'))"; th
     echo "❌ Error: package.json is not valid JSON"
     exit 1
 fi
+FILE_VERSION="$(tr -d '[:space:]' < "$PROJECT_ROOT/VERSION")"
+PKG_VERSION="$(python3 -c "import json; print(json.load(open('$PROJECT_ROOT/package.json'))['version'])")"
+if [[ "$FILE_VERSION" != "$PKG_VERSION" ]]; then
+    echo "❌ Error: VERSION ($FILE_VERSION) and package.json ($PKG_VERSION) differ - run ./release.sh X.Y.Z"
+    exit 1
+fi
 
 # Test 8: Check if help command works (basic functionality test)
 echo "❓ Testing help command..."
@@ -88,6 +94,25 @@ if ! timeout 10s "$PROJECT_ROOT/src/mox.sh" help >/dev/null 2>&1; then
     echo "⚠️  Warning: help command failed or timed out (this might be expected without dependencies)"
 else
     echo "✅ Help command executed successfully"
+fi
+
+# Test 9: Daemon lifecycle on a fresh MUSIC_ROOT (catches missing _bootstrap etc.)
+echo "🔁 Testing daemon start/stop on a fresh state dir..."
+if command -v mpv >/dev/null 2>&1 && command -v socat >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    LIFECYCLE_ROOT="$(mktemp -d)"
+    trap 'MUSIC_ROOT="$LIFECYCLE_ROOT" "$PROJECT_ROOT/mox" stop >/dev/null 2>&1 || true; rm -rf "$LIFECYCLE_ROOT"' EXIT
+    export MUSIC_ROOT="$LIFECYCLE_ROOT"
+    "$PROJECT_ROOT/mox" start >/dev/null || { echo "❌ Error: mox start failed on a fresh MUSIC_ROOT"; exit 1; }
+    [[ -S "$LIFECYCLE_ROOT/socket/mpv.sock" ]] || { echo "❌ Error: mpv socket missing after mox start"; exit 1; }
+    "$PROJECT_ROOT/mox" eq bass >/dev/null || { echo "❌ Error: mox eq bass failed"; exit 1; }
+    "$PROJECT_ROOT/mox" stop >/dev/null || { echo "❌ Error: mox stop failed"; exit 1; }
+    [[ ! -S "$LIFECYCLE_ROOT/socket/mpv.sock" ]] || { echo "❌ Error: socket still present after mox stop"; exit 1; }
+    "$PROJECT_ROOT/mox" start >/dev/null || { echo "❌ Error: mox start failed after stop"; exit 1; }
+    "$PROJECT_ROOT/mox" stop >/dev/null
+    unset MUSIC_ROOT
+    echo "✅ Daemon lifecycle OK"
+else
+    echo "⚠️  Skipping daemon lifecycle test (mpv/socat/jq not installed)"
 fi
 
 echo "✅ All smoke tests passed!"

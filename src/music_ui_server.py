@@ -102,8 +102,6 @@ if not MUSIC_ROOT:
 class E:
     # Auth
     CSRF_INVALID       = "csrf_invalid"
-    AUTH_REQUIRED      = "auth_required"
-    AUTH_INVALID       = "auth_invalid"
     # Rate limiting / size
     RATE_LIMITED       = "rate_limited"
     BODY_TOO_LARGE     = "body_too_large"
@@ -140,9 +138,18 @@ HISTORY_FILE = os.path.join(MUSIC_ROOT, "data", "history")
 LIKES_FILE = os.path.join(MUSIC_ROOT, "data", "likes")
 HTML_DIR = os.path.dirname(os.path.abspath(__file__))
 CSRF_TOKEN = secrets.token_urlsafe(32)
-AUTH_TOKEN = secrets.token_urlsafe(32)
-UXI_AUTH_ENABLED = os.environ.get("UXI_AUTH") == "1"
-UXI_AUTH_PIN = f"{secrets.randbelow(1000000):06d}" if UXI_AUTH_ENABLED else ""
+
+
+def _read_mox_version():
+    # VERSION sits next to src/ in every install layout (repo, npm, Homebrew libexec, Debian)
+    try:
+        with open(os.path.join(HTML_DIR, "..", "VERSION"), encoding="utf-8") as f:
+            return f.read().strip() or "unknown"
+    except OSError:
+        return "unknown"
+
+
+MOX_VERSION = _read_mox_version()
 FONTS_DIR = os.path.join(HTML_DIR, "fonts")
 PLUGINS_DIR = os.path.join(MUSIC_ROOT, "plugins")
 CSP_HEADER = (
@@ -671,7 +678,7 @@ def _fetch_full_state():
     pos          = props.get("time-pos") or 0
     dur          = props.get("duration") or 0
     paused       = props.get("pause")
-    volume       = props.get("volume") or 80
+    volume       = 80 if props.get("volume") in (None, "") else props.get("volume")
     speed        = props.get("speed") or 1.0
     loop_playlist = props.get("loop-playlist") or "no"
     loop_file    = props.get("loop-file") or "no"
@@ -873,12 +880,9 @@ def _mox_args_for_mode(query: str, mode: str) -> List[str]:
     mode = (mode or "replace").strip().lower()
     if mode not in ("replace", "add", "add-next"):
         raise ValueError("mode must be replace, add, or add-next")
-    args = [_resolve_mox_binary(), query]
-    if mode == "add":
-        args.append("-a")
-    elif mode == "add-next":
-        args.append("-an")
-    return args
+    # Explicit subcommand so a query like "stop" or "-x" is searched, not dispatched
+    subcommand = {"replace": "play", "add": "add", "add-next": "add-next"}[mode]
+    return [_resolve_mox_binary(), subcommand, query]
 
 
 def _run_mox_media(query: str, mode: str = "replace"):
@@ -1206,7 +1210,7 @@ ALLOWED_CMD_ACTIONS = frozenset([
     "pause", "pp", "next", "mn", "prev", "mb", "stop", "seek", "vol", "volume",
     "speed", "repeat", "rp", "repeat-one", "ro", "shuffle", "playlist-play-index",
     "clear", "norm", "like", "autodj", "eq", "eq-custom", "sleep", "play", "add",
-    "mox", "qrm", "qmove", "stats", "history-stats",
+    "qrm", "qmove", "stats", "history-stats",
 
 ])
 
@@ -1308,7 +1312,9 @@ def handle_cmd(cmd_str):
         if len(parts) > 1:
             arg = parts[1]
             if arg.startswith("+") or arg.startswith("-"):
-                cur = mpv_get("volume") or 80
+                cur = mpv_get("volume")
+                if cur in (None, ""):
+                    cur = 80
                 try:
                     new_vol = max(0, min(150, float(cur) + float(arg)))
                 except (TypeError, ValueError):
@@ -1455,25 +1461,9 @@ def handle_cmd(cmd_str):
     # For other whitelisted commands, use subprocess for safety
     if action in ALLOWED_CMD_ACTIONS:
         try:
-            if action == "mox":
-                # Special handling for mox subcommands
-                rest = cmd_str[len(action):].strip()
-                if rest:
-                    # Validate subcommand arguments
-                    if not re.match(r'^[a-zA-Z0-9\s\-+.:]+$', rest):
-                        return _err(E.INVALID_ARGS, "invalid mox arguments")
-                    subprocess.Popen([_resolve_mox_binary()] + rest.split(),
-                                   stdout=subprocess.DEVNULL, 
-                                   stderr=subprocess.DEVNULL)
-                else:
-                    subprocess.Popen([_resolve_mox_binary()],
-                                   stdout=subprocess.DEVNULL, 
-                                   stderr=subprocess.DEVNULL)
-            else:
-                # Execute as mox subcommand
-                subprocess.Popen([_resolve_mox_binary()] + parts,
-                               stdout=subprocess.DEVNULL, 
-                               stderr=subprocess.DEVNULL)
+            subprocess.Popen([_resolve_mox_binary()] + parts,
+                           stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
             return {"ok": True, "msg": f"executed: {cmd_str}"}
         except Exception as e:
             return _err(E.CMD_FAILED, f"command failed: {str(e)}")
@@ -1644,13 +1634,19 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             and secrets.compare_digest(cookie_token, CSRF_TOKEN)
         )
 
-    def _validate_auth(self):
-        if not UXI_AUTH_ENABLED or os.environ.get("MOX_TEST_MODE"):
+    def _valid_host(self):
+        # Blocks DNS-rebinding: a foreign site resolving to 127.0.0.1 still sends its own Host
+        host = (self.headers.get("Host") or "").lower()
+        if host in (f"127.0.0.1:{PORT}", f"localhost:{PORT}"):
             return True
-        return secrets.compare_digest(self._read_cookie("mox_auth") or "", AUTH_TOKEN)
+        logger.warning(f"Rejected request with Host header: {host!r}")
+        self.send_error(403, "Forbidden host")
+        return False
 
     def do_GET(self):
         try:
+            if not self._valid_host():
+                return
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
 
@@ -1664,8 +1660,6 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
                 self._serve_html()
             elif path in ("/api/state", "/api/v2/state"):
                 self._json_response(get_full_state())
-            elif path == "/api/auth":
-                self._json_response({"authRequired": UXI_AUTH_ENABLED, "authenticated": self._validate_auth()})
             elif path in ("/api/events", "/api/v2/events"):
                 self._serve_sse()
             elif path == "/api/v2/search":
@@ -1939,6 +1933,8 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         try:
+            if not self._valid_host():
+                return
             parsed = urllib.parse.urlparse(self.path)
             path = parsed.path
 
@@ -1953,11 +1949,7 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
                 self._json_response(_err(E.CSRF_INVALID, "invalid session token"), 403)
                 return
 
-            if path == "/api/auth":
-                self._handle_auth_request()
-            elif not self._validate_auth():
-                self._json_response(_err(E.AUTH_REQUIRED, "PIN required"), 401)
-            elif path in ("/api/cmd", "/api/v2/cmd"):
+            if path in ("/api/cmd", "/api/v2/cmd"):
                 self._handle_cmd_request()
             elif path in ("/api/play", "/api/v2/play"):
                 self._handle_play_request()
@@ -1971,29 +1963,6 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
         except Exception as e:
             self.handle_exception(e)
 
-    def _handle_auth_request(self):
-        length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(length).decode(errors="replace") if length else "{}"
-        try:
-            data = json.loads(body)
-        except json.JSONDecodeError:
-            self._json_response(_err(E.INVALID_JSON, "invalid JSON"), 400)
-            return
-        pin = str(data.get("pin", ""))
-        if UXI_AUTH_ENABLED and secrets.compare_digest(pin, UXI_AUTH_PIN):
-            self._json_response(
-                {"ok": True, "msg": "authenticated"},
-                headers={
-                    "Set-Cookie": (
-                        f"mox_auth={AUTH_TOKEN}; Path=/; SameSite=Strict; HttpOnly"
-                    )
-                },
-            )
-        elif not UXI_AUTH_ENABLED:
-            self._json_response({"ok": True, "msg": "auth disabled"})
-        else:
-            self._json_response(_err(E.AUTH_INVALID, "invalid PIN"), 401)
-    
     def _handle_cmd_request(self):
         """Handle /api/cmd POST requests."""
         try:
@@ -2134,7 +2103,7 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
         html_path = os.path.join(HTML_DIR, "music_ui.html")
         try:
             with open(html_path, "rb") as f:
-                content = f.read()
+                content = f.read().replace(b"__MOX_VERSION__", MOX_VERSION.encode("utf-8"))
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", len(content))
@@ -2152,6 +2121,9 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
 
     def _json_response(self, data, status=200, headers=None):
         body = json.dumps(data).encode()
+        if status >= 400:
+            # Error paths may not have consumed the request body; don't reuse the connection
+            self.close_connection = True
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", len(body))
@@ -2234,16 +2206,15 @@ def main():
         print(f"   html: {html_path}")
         print(f"   log: ~/music_system/data/server.log")
         print(f"   SSE: GET /api/events")
-        if UXI_AUTH_ENABLED:
-            print(f"   Web UI PIN: {UXI_AUTH_PIN}")
         print(f"   press Ctrl+C to stop")
         
         # Set up signal handlers for graceful shutdown
         import signal
         def signal_handler(signum, frame):
             logger.info(f"Received signal {signum}, shutting down...")
-            if server:
-                server.shutdown()
+            # server.shutdown() here would deadlock: it blocks until
+            # serve_forever() returns, which runs on this same thread.
+            raise KeyboardInterrupt
         
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGINT, signal_handler)

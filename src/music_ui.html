@@ -767,43 +767,6 @@
         display: none;
       }
 
-      .auth-overlay {
-        display: none;
-        position: fixed;
-        inset: 0;
-        z-index: 500;
-        background: rgba(10, 10, 11, 0.92);
-        place-items: center;
-      }
-
-      .auth-overlay.show {
-        display: grid;
-      }
-
-      .auth-box {
-        width: min(320px, calc(100vw - 32px));
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 18px;
-      }
-
-      .auth-box h2 {
-        font-size: 16px;
-        margin-bottom: 10px;
-      }
-
-      .auth-box input {
-        width: 100%;
-        margin: 10px 0;
-        padding: 10px;
-        border-radius: 8px;
-        border: 1px solid var(--border);
-        background: var(--surface2);
-        color: var(--text);
-        font-family: "Space Mono", monospace;
-      }
-
       .queue-item.active .queue-item-title {
         color: var(--accent);
       }
@@ -1599,7 +1562,7 @@
       <header class="header">
         <div class="logo">
           mox<span
-            >terminal music CLI v8.0.1 ·
+            >terminal music CLI v__MOX_VERSION__ ·
             <kbd
               style="
                 background: var(--surface2);
@@ -2593,23 +2556,6 @@
       </div>
     </div>
 
-    <div class="auth-overlay" id="auth-overlay">
-      <div class="auth-box">
-        <h2>mox PIN</h2>
-        <div style="color: var(--muted); font-size: 12px">
-          Enter the PIN printed by <code>mox uxi</code>.
-        </div>
-        <input
-          id="auth-pin"
-          inputmode="numeric"
-          autocomplete="one-time-code"
-          placeholder="6-digit PIN"
-          onkeydown="if (event.key === 'Enter') submitPin();"
-        />
-        <button class="eq-btn" onclick="submitPin()">unlock</button>
-      </div>
-    </div>
-
     <script>
       // ── State ──────────────────────────────────────────────────────────────────
       const state = {
@@ -2679,7 +2625,8 @@
         if (!str || typeof str !== "string") return "";
         const div = document.createElement("div");
         div.textContent = str;
-        return div.innerHTML;
+        // innerHTML does not escape quotes; results are also used inside attributes
+        return div.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
       }
 
       // ── API helpers ────────────────────────────────────────────────────────────
@@ -2847,33 +2794,6 @@
         }
       }
 
-      async function checkAuth() {
-        try {
-          const r = await fetch(API + "/api/auth", {
-            signal: AbortSignal.timeout(3000),
-          });
-          const data = await r.json();
-          document
-            .getElementById("auth-overlay")
-            .classList.toggle("show", data.authRequired && !data.authenticated);
-        } catch (_) {}
-      }
-
-      async function submitPin() {
-        const pin = document.getElementById("auth-pin").value.trim();
-        const r = await fetch(API + "/api/auth", {
-          method: "POST",
-          headers: apiHeaders(),
-          body: JSON.stringify({ pin }),
-        });
-        if (r.ok) {
-          document.getElementById("auth-overlay").classList.remove("show");
-          showToast("unlocked", "success");
-        } else {
-          showToast("invalid PIN", "error");
-        }
-      }
-
       // ── SSE + Polling ───────────────────────────────────────────────────────────
 
       let sse = null;
@@ -3018,9 +2938,8 @@
           bufferPct,
         } = state;
 
-        document.getElementById("track-title").textContent = escapeHtml(
-          title || "nothing playing",
-        );
+        document.getElementById("track-title").textContent =
+          title || "nothing playing";
 
         // Update browser tab title with now playing
         if (title && title !== "nothing playing") {
@@ -4857,7 +4776,6 @@
       initTheme();
       document.getElementById("theme-toggle").onclick = toggleTheme;
       applyEqPreset(localStorage.getItem("mox-eq-preset") || "flat");
-      checkAuth();
 
       showToast("🎵 connecting to mox daemon… press ? for shortcuts", "info");
       readShareLink(); // auto-play from URL hash if present

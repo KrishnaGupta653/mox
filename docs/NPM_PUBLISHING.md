@@ -17,10 +17,10 @@ cd tests && ./test.sh
 
 # 3. Check package contents
 npm pack
-tar -tzf mox-cli-8.0.0.tgz
+tar -tzf "mox-cli-$(cat VERSION).tgz"
 
 # 4. Test local installation
-npm install -g ./mox-cli-8.0.0.tgz
+npm install -g "./mox-cli-$(cat VERSION).tgz"
 mox --help
 npm uninstall -g mox-cli
 ```
@@ -45,26 +45,21 @@ npm info mox-cli
 
 ### Updating Versions
 
+Releases are published by CI, not from your machine. Pushing a `v*` tag publishes to
+npm and updates the Homebrew tap in the same run.
+
 ```bash
-# 1. Update version (patch/minor/major)
-npm version patch  # 7.2.2 -> 7.2.3
-npm version minor  # 7.2.2 -> 7.3.0
-npm version major  # 7.2.2 -> 8.0.0
+# 1. Bump VERSION + package.json (+ formula URL and changelog stubs); everything else reads VERSION
+./release.sh 8.0.3          # edits files only; prints the git commands to run next
 
-# 2. Update VERSION file to match
-echo "7.2.3" > VERSION
-
-# 3. Commit changes
-git add .
-git commit -m "Bump version to 7.2.3"
+# 2. Commit and push main, then wait for CI to go green
+git add -A
+git commit -m "bump: version 8.0.3"
 git push
 
-# 4. Publish
-npm publish
-
-# 5. Create Git tag
-git tag v7.2.3
-git push --tags
+# 3. Tag to publish (the tag must match VERSION and package.json, or CI stops)
+git tag v8.0.3
+git push origin v8.0.3
 ```
 
 ## Installation for Users
@@ -102,20 +97,25 @@ npm install -g mox-cli@latest
 
 ## Automated Publishing with GitHub Actions
 
-The CI workflow in `.github/workflows/ci.yml` can be extended for automatic publishing:
+The `publish-npm` job in `.github/workflows/ci.yml` uses npm **trusted publishing** (OIDC),
+so no npm token is stored in GitHub. It runs only when a `v*` tag is pushed.
 
 ```yaml
 publish-npm:
-  needs: test
+  needs: [test, build]
   runs-on: ubuntu-latest
-  if: github.event_name == 'release'
+  if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+  permissions:
+    contents: read
+    id-token: write
   steps:
     - uses: actions/checkout@v4
-    - uses: actions/setup-node@v3
+    - uses: actions/setup-node@v4
       with:
-        node-version: "18"
+        node-version: "24"          # needs npm >= 11.5.1
         registry-url: "https://registry.npmjs.org"
     - run: npm publish
-      env:
-        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
+
+One-time setup on npmjs.com → `mox-cli` → Settings → Trusted Publisher → GitHub Actions:
+owner `KrishnaGupta653`, repository `mox`, workflow `ci.yml`, environment empty.

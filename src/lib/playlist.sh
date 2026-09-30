@@ -608,13 +608,11 @@ do_txt() {
     done
     echo "done/${#TXT_LINES[@]}" > "$progress"
     rm -rf "$tmpdir"
-  ) >/dev/null 2>&1 &
+  ) >/dev/null 2>&1 &!
 
   local bg_pid=$!
-  # v5-C: write PID file atomically BEFORE disown (tempfile swap)
   local tmpf_pid; tmpf_pid=$(mktemp "$DATA_DIR/txt_bg_pid.XXXXXX")
   echo $bg_pid > "$tmpf_pid" && mv "$tmpf_pid" "$DATA_DIR/txt_bg_pid" || rm -f "$tmpf_pid"
-  disown $bg_pid
 
   local progress_last=""
   local progress_deadline=$(( $(date +%s) + 8 ))

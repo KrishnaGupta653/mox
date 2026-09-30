@@ -152,8 +152,8 @@ if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
         fi
     fi
     echo ""
-    echo "After installing dependencies, run 'mox help' to start using the music CLI."
-    exit 1
+    echo "After installing dependencies, run 'mox doctor' to verify."
+    # Non-fatal: a failing postinstall makes `npm install -g` roll back the whole package
 fi
 
 if [ ${#OPTIONAL_DEPS[@]} -gt 0 ]; then
@@ -194,7 +194,11 @@ else
 fi
 
 echo ""
-echo "✅ Installation completed successfully!"
+if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
+    echo "⚠️  Installed, but mox won't run until the missing dependencies above are installed."
+else
+    echo "✅ Installation completed successfully!"
+fi
 echo ""
 echo "🚀 Quick start:"
 echo "   mox help          - Show all available commands"
