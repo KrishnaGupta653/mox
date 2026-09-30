@@ -1324,11 +1324,11 @@ do_radio() {
 do_chapter() {
   _need
   _check_deps
-  local path; path=$(_get path)
-  [[ -z "$path" ]] && { _err 4 "nothing playing"; return 1; }
-  [[ "$path" != *youtube* && "$path" != *youtu.be* ]] && { _warn "chapters only for YouTube videos"; return; }
+  local media_path; media_path=$(_get path)
+  [[ -z "$media_path" ]] && { _err 4 "nothing playing"; return 1; }
+  [[ "$media_path" != *youtube* && "$media_path" != *youtu.be* ]] && { _warn "chapters only for YouTube videos"; return; }
   local chapters
-  chapters=$("$YTDLP" --dump-json --no-download "$path" 2>/dev/null | \
+  chapters=$("$YTDLP" --dump-json --no-download "$media_path" 2>/dev/null | \
     "$JQ" -r '.chapters[]? | "\(.start_time // 0)\t\(.title // "untitled")"' 2>/dev/null)
   [[ -z "$chapters" ]] && { _warn "no chapters in this video"; return; }
   local chosen

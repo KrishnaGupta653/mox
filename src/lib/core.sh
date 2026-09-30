@@ -121,9 +121,10 @@ _ensure_bin() {
   # Already resolved (non-empty)?
   local current="${(P)varname-}"
   [[ -n "$current" ]] && return 0
-  local path; path=$(_resolve_bin "$binary")
-  if [[ -n "$path" ]]; then
-    eval "${varname}=${(q)path}"
+  # Not "path": in zsh that is tied to $PATH, and `local path` empties PATH for this function
+  local resolved; resolved=$(_resolve_bin "$binary")
+  if [[ -n "$resolved" ]]; then
+    eval "${varname}=${(q)resolved}"
   fi
 }
 
