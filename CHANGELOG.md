@@ -7,13 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [8.0.3] - 2026-10-01
 
-### Changed
-- TODO: describe this release
-
-## [8.0.2] - 2026-10-01
+8.0.2 was tagged but never published (Linux CI failed); its changes ship here.
 
 ### Fixed
 - **`mox start`**: works again on a fresh install (state dirs and lock files are created before first use)
+- **Linux**: mox couldn't find mpv/socat/jq installed via apt ("install missing deps"); zsh's `local path` was emptying `PATH`
 - **Linux**: every locked command (`start`, `play`, …) exited with code 127 after running; the lock file is now closed correctly
 - **Stale locks**: a lock left by a crashed mox is taken over immediately instead of waiting for the timeout
 - **`mox eq`**: presets `bass`, `treble`, `vocal`, `loud` crashed with "parameter not set"
