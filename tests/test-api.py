@@ -4,8 +4,10 @@ API tests for mox music_ui_server.py
 Tests all HTTP endpoints, error handling, and security features
 """
 
+import http.client
 import json
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -18,6 +20,7 @@ from unittest.mock import patch, MagicMock
 import subprocess
 import socket
 import shutil
+from pathlib import Path
 
 os.environ.setdefault('MOX_TEST_MODE', '1')
 
@@ -177,9 +180,21 @@ class TestMoxAPI(unittest.TestCase):
         
         # Test valid command
         status, content, headers = self.make_request('/api/cmd', 'POST', {'cmd': 'pause'})
-        
-        # Should return 200 even if mpv is not connected (graceful handling)
-        self.assertIn(status, [200, 500], "Command endpoint should handle requests")
+
+        # No mpv in the test root: must say so instead of pretending the pause worked
+        self.assertIn(status, [200, 400], "Command endpoint should handle requests")
+        if status == 400:
+            self.assertIn("isn't running", json.loads(content)["msg"])
+
+    def test_negative_content_length_is_rejected(self):
+        if not self.start_server():
+            self.skipTest("Server failed to start")
+        conn = http.client.HTTPConnection('localhost', self.test_port, timeout=5)
+        conn.putrequest('POST', '/api/cmd')
+        conn.putheader('Content-Length', '-1')
+        conn.endheaders()
+        self.assertEqual(conn.getresponse().status, 400)
+        conn.close()
     
     def test_api_cmd_validation(self):
         """Test command validation"""
@@ -438,21 +453,58 @@ class TestUXIFixes(unittest.TestCase):
         from music_ui_server import _mox_args_for_mode
 
         with patch('music_ui_server._resolve_mox_binary', return_value='/bin/mox'):
-            self.assertEqual(_mox_args_for_mode('song', 'replace'), ['/bin/mox', 'song'])
-            self.assertEqual(_mox_args_for_mode('song', 'add'), ['/bin/mox', 'song', '-a'])
-            self.assertEqual(_mox_args_for_mode('song', 'add-next'), ['/bin/mox', 'song', '-an'])
+            self.assertEqual(_mox_args_for_mode('song', 'replace'), ['/bin/mox', 'play', 'song'])
+            self.assertEqual(_mox_args_for_mode('song', 'add'), ['/bin/mox', 'add', 'song'])
+            self.assertEqual(_mox_args_for_mode('song', 'add-next'), ['/bin/mox', 'add-next', 'song'])
 
     def test_run_mox_media_is_nonblocking_and_url_safe(self):
+        import subprocess
         from music_ui_server import _run_mox_media
 
         with patch('music_ui_server._resolve_mox_binary', return_value='/bin/mox'), \
              patch('music_ui_server.subprocess.Popen') as popen:
+            popen.return_value.communicate.side_effect = [
+                subprocess.TimeoutExpired('mox', 2), (b'', b''),
+            ]
+            popen.return_value.returncode = 0
             proc, result = _run_mox_media('https://youtu.be/abc123xyz00?si=test&list=PL123', 'add')
 
         self.assertTrue(result['ok'])
         self.assertIsNotNone(proc)
         popen.assert_called_once()
-        self.assertEqual(popen.call_args.args[0], ['/bin/mox', 'https://youtu.be/abc123xyz00?si=test&list=PL123', '-a'])
+        self.assertEqual(popen.call_args.args[0], ['/bin/mox', 'add', 'https://youtu.be/abc123xyz00?si=test&list=PL123'])
+        # stdin must not be a terminal, or mox would open the fzf picker
+        self.assertEqual(popen.call_args.kwargs['stdin'], subprocess.DEVNULL)
+
+    def test_song_titles_with_ampersand_and_dollar_are_valid(self):
+        from music_ui_server import _validate_query
+
+        self.assertTrue(_validate_query('Rock & Roll')[0])
+        self.assertTrue(_validate_query('Ke$ha Tik Tok')[0])
+        self.assertFalse(_validate_query('song; rm -rf ~')[0])
+        self.assertFalse(_validate_query('<script>x</script>')[0])
+
+    def test_search_row_keeps_pipes_in_title(self):
+        from music_ui_server import _split_search_row
+
+        row = _split_search_row('Synthwave mix | 10 hours | 10:00:01 | https://www.youtube.com/watch?v=abc')
+        self.assertEqual(row, {'title': 'Synthwave mix | 10 hours', 'duration': '10:00:01',
+                               'url': 'https://www.youtube.com/watch?v=abc'})
+        self.assertEqual(_split_search_row('Plain | 3:21 | https://x.y/z')['title'], 'Plain')
+        self.assertIsNone(_split_search_row('no url here | 3:21 | nope'))
+
+    def test_eq_detected_from_mpv_filter_chain(self):
+        from music_ui_server import _eq_from_af
+
+        audio_sh = (Path(__file__).resolve().parent.parent / 'src' / 'lib' / 'audio.sh').read_text()
+        for name, preset in (('BASS', 'bass'), ('TREBLE', 'treble'), ('VOCAL', 'vocal'), ('LOUD', 'loud')):
+            graph = re.search(rf'^_EQ_{name}="lavfi=\[(.*)\]"', audio_sh, re.M).group(1)
+            af = [{'name': 'lavfi', 'enabled': True, 'params': {'graph': graph}}]
+            self.assertEqual(_eq_from_af(af), preset)
+        self.assertEqual(_eq_from_af([]), 'flat')
+        self.assertEqual(_eq_from_af(None), 'flat')
+        self.assertEqual(_eq_from_af([{'name': 'lavfi', 'params': {'graph': 'loudnorm'}}]), 'flat')
+        self.assertEqual(_eq_from_af([{'name': 'lavfi', 'params': {'graph': 'equalizer=f=32:t=h:w=32:g=3'}}]), 'custom')
 
     def test_eq_custom_and_sleep_validate(self):
         from music_ui_server import _validate_cmd

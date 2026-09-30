@@ -20,6 +20,7 @@ import http.server
 import json
 import logging
 import os
+import queue
 import re
 import secrets
 import socket
@@ -84,7 +85,8 @@ def _validate_music_root(path):
     
     # Ensure it's within user's home directory for security
     home_dir = os.path.expanduser("~")
-    if not resolved.startswith(home_dir):
+    # Path-boundary check: /Users/bob must not accept /Users/bobby/...
+    if resolved != home_dir and not resolved.startswith(home_dir.rstrip(os.sep) + os.sep):
         return None
     
     return resolved
@@ -369,6 +371,10 @@ def mpv_get_batch(props):
                 try:
                     chunk = sock.recv(4096)
                     if not chunk:
+                        # mpv closed the socket (quit/restart): drop it so the next call reconnects
+                        sock.close()
+                        _mpv_persistent_sock = None
+                        _mpv_persistent_buf = b""
                         break
                     _mpv_persistent_buf += chunk
                     while b"\n" in _mpv_persistent_buf:
@@ -658,21 +664,25 @@ def _fetch_full_state():
     Uses a single socket session to fetch all mpv properties (batch).
     Lyrics: returns cached value or LYRICS_LOADING -- never blocks on fetch.
     """
+    offline = {
+        "alive": False, "playing": False, "paused": True,
+        "title": "nothing playing", "pos": 0, "dur": 0,
+        "volume": 80, "speed": 1.0, "queue": [], "currentIdx": -1,
+        "repeat": False, "loopOne": False, "autoDj": False,
+        "autoDjSeed": "", "lyrics": None, "bufferPct": 0, "liked": False,
+    }
     if not mpv_alive():
-        return {
-            "alive": False, "playing": False, "paused": True,
-            "title": "nothing playing", "pos": 0, "dur": 0,
-            "volume": 80, "speed": 1.0, "queue": [], "currentIdx": -1,
-            "repeat": False, "loopOne": False, "autoDj": False,
-            "autoDjSeed": "", "lyrics": None, "bufferPct": 0, "liked": False,
-        }
+        return offline
 
     # Fetch all properties in one socket session.
     props = mpv_get_batch([
         "media-title", "time-pos", "duration", "pause",
         "volume", "speed", "loop-playlist", "loop-file", "playlist-playing-pos",
-        "playlist", "demuxer-cache-state",
+        "playlist", "demuxer-cache-state", "af",
     ])
+    # A live mpv always answers pause/volume; none at all means a stale socket file (mpv crashed)
+    if props.get("pause") is None and props.get("volume") is None:
+        return offline
 
     title        = props.get("media-title") or ""
     pos          = props.get("time-pos") or 0
@@ -691,8 +701,9 @@ def _fetch_full_state():
 
     queue = []
     for item in pl_data:
-        t = item.get("title") or item.get("filename", "")
-        queue.append({"title": t, "url": item.get("filename", ""), "current": item.get("current", False)})
+        fn = item.get("filename", "")
+        t = item.get("title") or (fn if "://" in fn else os.path.basename(fn))
+        queue.append({"title": t, "url": fn, "current": item.get("current", False)})
 
     try:
         pos = float(pos)
@@ -757,8 +768,28 @@ def _fetch_full_state():
         "lyrics": lyrics_data,
         "bufferPct": buffer_pct,
         "liked": _is_liked(current_url),
+        "eq": _eq_from_af(props.get("af")),
     }
 
+
+# First band of each preset in src/lib/audio.sh (_EQ_BASS etc.); keep in sync with it
+_EQ_FINGERPRINTS = {
+    "equalizer=f=80:t=h:w=200:g=6": "bass",
+    "equalizer=f=8000:t=h:w=4000:g=5": "treble",
+    "equalizer=f=300:t=h:w=200:g=-2": "vocal",
+    "equalizer=f=60:t=h:w=120:g=5": "loud",
+}
+
+
+def _eq_from_af(af) -> str:
+    """Name the EQ preset active in mpv's audio filter chain: flat, a preset, or custom."""
+    chain = af if isinstance(af, str) else json.dumps(af or [])
+    if "equalizer" not in chain:
+        return "flat"
+    return next((name for fp, name in _EQ_FINGERPRINTS.items() if fp in chain), "custom")
+
+
+SEARCH_STREAM_TIMEOUT = 60  # seconds
 
 RATE_LIMIT_REQUESTS = 10
 RATE_LIMIT_WINDOW = 1.0  # seconds
@@ -810,7 +841,8 @@ def get_full_state():
     return _state_cache.get()
 
 BLOCKED_QUERY_PATTERNS = (
-    r'[;&|`$]',     # shell metacharacters
+    # Queries reach mox as argv (never a shell), so '&' and '$' stay allowed: "Rock & Roll", "Ke$ha"
+    r'[;|`]',
     r'\.\./',       # path traversal
     r'<[^>]+>',     # HTML tags
     r'javascript:', # JS injection
@@ -885,6 +917,14 @@ def _mox_args_for_mode(query: str, mode: str) -> List[str]:
     return [_resolve_mox_binary(), subcommand, query]
 
 
+def _reap_mox(proc, query):
+    _, stderr = proc.communicate()
+    if proc.returncode != 0:
+        msg = re.sub(r'\x1b\[[0-9;]*m', '', (stderr or b"").decode("utf-8", errors="ignore")).strip()
+        logger.error(f"[MOX] '{query}' failed later (rc={proc.returncode}): {msg[:200]}")
+    _state_cache.invalidate()
+
+
 def _run_mox_media(query: str, mode: str = "replace"):
     valid, err = _validate_media_query(query)
     if not valid:
@@ -897,29 +937,28 @@ def _run_mox_media(query: str, mode: str = "replace"):
         logger.error(f"[MOX] Invalid args: {e}")
         return None, _err(E.INVALID_ARGS, str(e))
     
-    # Run mox and wait briefly to detect immediate failures
+    # Run mox and wait briefly to detect immediate failures.
+    # stdin=/dev/null makes mox pick the top search result instead of opening fzf.
     try:
         proc = subprocess.Popen(
             args,
-            stdout=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
         )
         logger.info(f"[MOX] Process started, PID: {proc.pid}")
-        
-        # Wait up to 2 seconds to detect immediate failures
+
         try:
-            stdout, stderr = proc.communicate(timeout=2)
+            _, stderr = proc.communicate(timeout=2)
             logger.info(f"[MOX] Process finished early, returncode: {proc.returncode}")
-            logger.info(f"[MOX] stdout: {stdout.decode('utf-8', errors='ignore')[:200]}")
-            logger.info(f"[MOX] stderr: {stderr.decode('utf-8', errors='ignore')[:200]}")
         except subprocess.TimeoutExpired:
-            # Still running after 2s - this is expected for successful plays
-            logger.info(f"[MOX] Process still running after 2s - likely successful")
-            pass
+            # Still searching/buffering: keep draining stderr so mox never blocks or gets
+            # SIGPIPE when this request returns, and reap it when it exits
+            threading.Thread(target=_reap_mox, args=(proc, query), daemon=True).start()
         else:
             # Process finished quickly - check if it was an error
             if proc.returncode != 0:
-                error_msg = stderr.decode('utf-8', errors='ignore').strip()
+                error_msg = re.sub(r'\x1b\[[0-9;]*m', '', stderr.decode('utf-8', errors='ignore')).strip()
                 if error_msg:
                     logger.error(f"[MOX] Command failed with error: {error_msg}")
                     return None, _err(E.CMD_FAILED, f"mox failed: {error_msg}")
@@ -934,6 +973,14 @@ def _run_mox_media(query: str, mode: str = "replace"):
     return proc, {"ok": True, "msg": f"{mode}: {query}"}
 
 
+def _split_search_row(line: str) -> Optional[dict]:
+    """'Title | Duration | URL' -> dict. Titles may themselves contain ' | ', so split from the right."""
+    parts = [part.strip() for part in line.split(" | ")]
+    if len(parts) >= 3 and re.match(r'^https?://', parts[-1]):
+        return {"title": " | ".join(parts[:-2]), "duration": parts[-2], "url": parts[-1]}
+    return None
+
+
 def _parse_search_output(stdout):
     """Parse mox search table-ish output into title/duration/url rows."""
     results = []
@@ -946,9 +993,9 @@ def _parse_search_output(stdout):
         if re.match(r'^\d+\.', line):
             line = re.sub(r'^\d+\.\s*', '', line)
 
-        parts = [part.strip() for part in line.split(" | ")]
-        if len(parts) >= 3 and re.match(r'^https?://', parts[-1]):
-            results.append({"title": parts[0], "duration": parts[1], "url": parts[-1]})
+        row = _split_search_row(line)
+        if row:
+            results.append(row)
             continue
 
         duration = ""
@@ -982,6 +1029,7 @@ def search_tracks(query: str, limit: int = 20) -> dict:
             [
                 "yt-dlp",
                 f"ytsearch{limit}:{query}",
+                "--flat-playlist",
                 "--print", "%(title)s | %(duration_string)s | %(webpage_url)s",
                 "--no-download",
                 "--no-warnings"
@@ -1125,10 +1173,38 @@ def _read_history_rows() -> list:
     return rows
 
 
-def _latest_history_title() -> str:
-    """Return the most recent history title for Auto-DJ seed display."""
+_rows_cache = {}
+_rows_cache_lock = threading.Lock()
+
+
+def _cached_file_value(path, compute):
+    """Memoize compute() until the file's mtime/size changes.
+
+    The state endpoint runs ~4x/s; without this it re-read the whole history and likes files each time.
+    """
+    try:
+        st = os.stat(path)
+        key = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        key = None
+    with _rows_cache_lock:
+        hit = _rows_cache.get((path, compute))
+        if hit is not None and hit[0] == key:
+            return hit[1]
+    value = compute()
+    with _rows_cache_lock:
+        _rows_cache[(path, compute)] = (key, value)
+    return value
+
+
+def _compute_latest_history_title() -> str:
     rows = _read_history_rows()
     return rows[-1]["title"] if rows else ""
+
+
+def _latest_history_title() -> str:
+    """Return the most recent history title for Auto-DJ seed display."""
+    return _cached_file_value(HISTORY_FILE, _compute_latest_history_title)
 
 
 def get_history(page: int = 1, limit: int = 50) -> dict:
@@ -1195,12 +1271,16 @@ def get_likes() -> dict:
     return {"ok": True, "results": rows, "total": len(rows)}
 
 
+def _compute_liked_urls() -> tuple:
+    return tuple(row.get("url") or "" for row in _read_likes_rows())
+
+
 def _is_liked(url: str) -> bool:
     if not url:
         return False
     needle = url.strip()
-    for row in _read_likes_rows():
-        liked_url = (row.get("url") or "").strip()
+    for liked in _cached_file_value(LIKES_FILE, _compute_liked_urls):
+        liked_url = liked.strip()
         if liked_url and (liked_url in needle or needle in liked_url):
             return True
     return False
@@ -1273,6 +1353,26 @@ def _validate_cmd(cmd_str):
 
 # ── Handle commands from the UI ──────────────────────────────────────────────
 
+_MPV_DIRECT_ACTIONS = frozenset([
+    "pause", "pp", "next", "mn", "prev", "mb", "stop", "seek", "vol", "volume",
+    "speed", "repeat", "rp", "repeat-one", "ro", "shuffle", "playlist-play-index",
+    "qmove", "clear",
+])
+PLAYER_OFFLINE_MSG = "player isn't running — play something first (or run: mox start)"
+
+
+def _mpv_result(resp, ok_msg, fail_msg):
+    if resp.get("error") in ("success", None):
+        return {"ok": True, "msg": ok_msg}
+    return _err(E.CMD_FAILED, fail_msg)
+
+
+def _spawn_mox(args):
+    """Fire-and-forget mox subcommand that must never wait on a terminal."""
+    subprocess.Popen([_resolve_mox_binary()] + args, stdin=subprocess.DEVNULL,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def handle_cmd(cmd_str):
     """Execute an m-style command string against mpv."""
     valid, err = _validate_cmd(cmd_str)
@@ -1282,30 +1382,26 @@ def handle_cmd(cmd_str):
     parts = cmd_str.strip().split()
     action = parts[0]
 
+    if action in _MPV_DIRECT_ACTIONS and mpv_get("pause") is None:
+        return _err(E.CMD_FAILED, PLAYER_OFFLINE_MSG)
+
     if action in ("pause", "pp"):
-        mpv_command(["cycle", "pause"])
-        return {"ok": True, "msg": "toggled pause"}
+        return _mpv_result(mpv_command(["cycle", "pause"]), "toggled pause", "couldn't toggle pause")
 
     elif action in ("next", "mn"):
-        mpv_command(["playlist-next"])
-        return {"ok": True, "msg": "next track"}
+        return _mpv_result(mpv_command(["playlist-next"]), "next track", "no next track in the queue")
 
     elif action in ("prev", "mb"):
-        mpv_command(["playlist-prev"])
-        return {"ok": True, "msg": "previous track"}
+        return _mpv_result(mpv_command(["playlist-prev"]), "previous track", "already at the first track")
 
     elif action == "stop":
-        mpv_command(["stop"])
-        return {"ok": True, "msg": "stopped"}
+        return _mpv_result(mpv_command(["stop"]), "stopped", "couldn't stop playback")
 
     elif action == "seek":
         if len(parts) > 1:
             arg = parts[1]
-            if arg.startswith("+") or arg.startswith("-"):
-                mpv_command(["seek", arg, "relative"])
-            else:
-                mpv_command(["seek", arg, "absolute"])
-            return {"ok": True, "msg": f"seek {arg}"}
+            flag = "relative" if arg.startswith(("+", "-")) else "absolute"
+            return _mpv_result(mpv_command(["seek", arg, flag]), f"seek {arg}", "nothing seekable is playing")
         return _err(E.MISSING_ARGS, "seek needs argument")
 
     elif action in ("vol", "volume"):
@@ -1351,18 +1447,17 @@ def handle_cmd(cmd_str):
         return {"ok": True, "msg": f"repeat-one {'on' if new_val == 'inf' else 'off'}"}
 
     elif action == "shuffle":
-        mpv_command(["playlist-shuffle"])
-        return {"ok": True, "msg": "shuffled"}
+        return _mpv_result(mpv_command(["playlist-shuffle"]), "shuffled", "couldn't shuffle the queue")
 
-    elif action == "add":
+    elif action in ("add", "play"):
         if len(parts) > 1:
             query = " ".join(parts[1:])
             try:
-                _, result = _run_mox_media(query, "add")
+                _, result = _run_mox_media(query, "add" if action == "add" else "replace")
                 return result
             except Exception as e:
-                return _err(E.QUEUE_FAILED, f"queue failed: {str(e)}")
-        return _err(E.MISSING_ARGS, "add needs query")
+                return _err(E.QUEUE_FAILED, f"{action} failed: {str(e)}")
+        return _err(E.MISSING_ARGS, f"{action} needs a song name or URL")
 
     elif action == "playlist-play-index":
         if len(parts) > 1:
@@ -1384,41 +1479,32 @@ def handle_cmd(cmd_str):
                 to_idx = int(parts[2]) - 1
                 if from_idx < 0 or to_idx < 0:
                     return _err(E.QMOVE_INVALID, "qmove positions must be positive")
-                mpv_command(["playlist-move", from_idx, to_idx])
-                return {"ok": True, "msg": f"moved track {parts[1]} to {parts[2]}"}
+                return _mpv_result(mpv_command(["playlist-move", from_idx, to_idx]),
+                                   f"moved track {parts[1]} to {parts[2]}", "queue position out of range")
             except ValueError:
                 pass
         return _err(E.MISSING_ARGS, "qmove needs from/to positions")
 
     elif action == "clear":
-        mpv_command(["playlist-clear"])
-        return {"ok": True, "msg": "queue cleared"}
+        return _mpv_result(mpv_command(["playlist-clear"]), "queue cleared", "couldn't clear the queue")
 
     elif action in ("norm",):
         try:
-            subprocess.Popen([_resolve_mox_binary(), "norm"],
-                           stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL)
+            _spawn_mox(["norm"])
             return {"ok": True, "msg": "toggled normalize"}
         except Exception as e:
             return _err(E.CMD_FAILED, f"normalize failed: {str(e)}")
 
     elif action == "like":
-        # Use subprocess for safer execution
         try:
-            subprocess.Popen([_resolve_mox_binary(), "like"],
-                           stdout=subprocess.DEVNULL, 
-                           stderr=subprocess.DEVNULL)
+            _spawn_mox(["like"])
             return {"ok": True, "msg": "liked"}
         except Exception as e:
             return _err(E.LIKE_FAILED, f"like failed: {str(e)}")
 
     elif action == "autodj":
-        # Use subprocess for safer execution
         try:
-            subprocess.Popen([_resolve_mox_binary(), "autodj"],
-                           stdout=subprocess.DEVNULL, 
-                           stderr=subprocess.DEVNULL)
+            _spawn_mox(["autodj"])
             return {"ok": True, "msg": "toggled autodj"}
         except Exception as e:
             return _err(E.AUTODJ_FAILED, f"autodj failed: {str(e)}")
@@ -1433,37 +1519,28 @@ def handle_cmd(cmd_str):
         mpv_command(["af", "set", ""])
         if preset != "flat":
             try:
-                subprocess.Popen([_resolve_mox_binary(), "eq", preset],
-                               stdout=subprocess.DEVNULL, 
-                               stderr=subprocess.DEVNULL)
+                _spawn_mox(["eq", preset])
             except Exception as e:
                 return _err(E.EQ_FAILED, f"eq failed: {str(e)}")
         return {"ok": True, "msg": f"eq {preset}"}
 
     elif action == "eq-custom":
         try:
-            subprocess.Popen([_resolve_mox_binary(), "eq", "custom"] + parts[1:],
-                           stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL)
+            _spawn_mox(["eq", "custom"] + parts[1:])
             return {"ok": True, "msg": "custom eq applied"}
         except Exception as e:
             return _err(E.EQ_FAILED, f"eq failed: {str(e)}")
 
     elif action == "sleep":
         try:
-            subprocess.Popen([_resolve_mox_binary(), "sleep", parts[1]],
-                           stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL)
+            _spawn_mox(["sleep", parts[1]])
             return {"ok": True, "msg": "sleep timer updated"}
         except Exception as e:
             return _err(E.CMD_FAILED, f"sleep failed: {str(e)}")
 
-    # For other whitelisted commands, use subprocess for safety
     if action in ALLOWED_CMD_ACTIONS:
         try:
-            subprocess.Popen([_resolve_mox_binary()] + parts,
-                           stdout=subprocess.DEVNULL,
-                           stderr=subprocess.DEVNULL)
+            _spawn_mox(parts)
             return {"ok": True, "msg": f"executed: {cmd_str}"}
         except Exception as e:
             return _err(E.CMD_FAILED, f"command failed: {str(e)}")
@@ -1491,13 +1568,25 @@ class _SseState:
 
 
 class _SseClient:
-    """Represents one live SSE connection with its state machine."""
-    __slots__ = ("wfile", "state", "connected_at")
+    """Represents one live SSE connection with its state machine.
+
+    Broadcasts only enqueue; the connection's own handler thread does the socket
+    writes, so a slow or stuck browser tab can never stall updates to other tabs.
+    """
+    __slots__ = ("wfile", "state", "connected_at", "outbox")
 
     def __init__(self, wfile):
         self.wfile = wfile
         self.state = _SseState.CONNECTING
         self.connected_at = time.monotonic()
+        self.outbox = queue.Queue(maxsize=16)
+
+    def enqueue(self, msg_bytes):
+        """Queue a message for this client; a client this far behind is dropped (it reconnects)."""
+        try:
+            self.outbox.put_nowait(msg_bytes)
+        except queue.Full:
+            self.fail()
 
     def activate(self):
         """Transition CONNECTING → SSE_ACTIVE after initial state is delivered."""
@@ -1521,7 +1610,7 @@ class _SseClient:
             raise
 
 
-# Registry of live SSE connections (keyed by id(wfile) for O(1) lookup).
+# Registry of live SSE connections.
 _sse_clients: List[_SseClient] = []
 _sse_clients_lock = threading.Lock()
 _last_state_json = None
@@ -1543,24 +1632,13 @@ def _sse_unregister(client: _SseClient):
 
 
 def _sse_broadcast(data):
-    """Send JSON to all SSE_ACTIVE clients; prune failed ones."""
+    """Queue JSON for all SSE_ACTIVE clients (non-blocking); prune failed ones."""
     msg = f"data: {json.dumps(data)}\n\n".encode()
     with _sse_clients_lock:
-        dead = []
         for client in _sse_clients:
-            if not client.is_active():
-                if client.state == _SseState.SSE_FAILED:
-                    dead.append(client)
-                continue
-            try:
-                client.send(msg)
-            except OSError:
-                dead.append(client)
-        for c in dead:
-            try:
-                _sse_clients.remove(c)
-            except ValueError:
-                pass
+            if client.is_active():
+                client.enqueue(msg)
+        _sse_clients[:] = [c for c in _sse_clients if c.state != _SseState.SSE_FAILED]
 
 
 def _sse_poll_loop():
@@ -1826,16 +1904,16 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             _sse_unregister(client)
             return
 
-        # SSE_ACTIVE: keep connection open; _sse_poll_loop handles broadcasts.
-        # This thread only sends keepalive pings and detects disconnects.
+        # SSE_ACTIVE: write queued broadcasts; send a keepalive after 30s of silence.
+        # The write timeout ends this thread if the browser stops reading entirely.
         try:
+            self.connection.settimeout(30)
             while client.is_active():
-                time.sleep(30)
                 try:
-                    client.send(b": keepalive\n\n")
-                except OSError:
-                    # SSE_ACTIVE → SSE_FAILED
-                    break
+                    msg = client.outbox.get(timeout=30)
+                except queue.Empty:
+                    msg = b": keepalive\n\n"
+                client.send(msg)
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
         finally:
@@ -1847,10 +1925,7 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
         line = re.sub(r'\x1b\[[0-9;]*m', '', raw_line).strip()
         if not line:
             return None
-        parts = [part.strip() for part in line.split(" | ")]
-        if len(parts) >= 3 and re.match(r'^https?://', parts[-1]):
-            return {"title": parts[0], "duration": parts[1], "url": parts[-1]}
-        return None
+        return _split_search_row(line)
 
     def _serve_search_stream(self, query: str, limit: int = 10):
         """Stream search results as SSE events back to the client.
@@ -1880,10 +1955,12 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
                 [
                     "yt-dlp",
                     f"ytsearch{limit}:{query}",
+                    "--flat-playlist",
                     "--print", "%(title)s | %(duration_string)s | %(webpage_url)s",
                     "--no-download",
                     "--no-warnings",
                 ],
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 text=True,
@@ -1901,6 +1978,10 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             return
 
         sent = 0
+        # A stalled yt-dlp (network hang) would otherwise hold this connection open forever
+        watchdog = threading.Timer(SEARCH_STREAM_TIMEOUT, proc.kill)
+        watchdog.daemon = True
+        watchdog.start()
         try:
             # Read lines as they come and send as SSE 'data' messages
             for raw_line in proc.stdout:
@@ -1925,9 +2006,11 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             except Exception:
                 pass
         finally:
+            watchdog.cancel()
             try:
-                if proc and proc.poll() is None:
+                if proc.poll() is None:
                     proc.kill()
+                proc.wait(timeout=2)
             except Exception:
                 pass
 
@@ -1971,28 +2054,10 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
                 self._json_response(_err(E.RATE_LIMITED, "rate limit exceeded"), 429)
                 return
             
-            # Validate content length
-            length = int(self.headers.get("Content-Length", 0))
-            if length > 10000:  # 10KB limit
-                logger.warning(f"Request too large: {length} bytes")
-                self._json_response(_err(E.BODY_TOO_LARGE, "request too large"), 413)
+            data = self._read_json_body("cmd")
+            if data is None:
                 return
-            
-            body = self.rfile.read(length).decode(errors="replace") if length else "{}"
-            
-            try:
-                data = json.loads(body)
-            except json.JSONDecodeError as e:
-                logger.warning(f"Invalid JSON in cmd request: {e}")
-                self._json_response(_err(E.INVALID_JSON, "invalid JSON"), 400)
-                return
-            
-            # Validate that data is a dict and has cmd field
-            if not isinstance(data, dict):
-                logger.warning("Request data is not a JSON object")
-                self._json_response(_err(E.INVALID_JSON, "request must be JSON object"), 400)
-                return
-            
+
             cmd_str = data.get("cmd", "")
             if not cmd_str:
                 logger.warning("Missing cmd field in request")
@@ -2014,7 +2079,14 @@ class UXIHandler(http.server.BaseHTTPRequestHandler):
             self._json_response(_err(E.CMD_FAILED, "internal error"), 500)
 
     def _read_json_body(self, label: str):
-        length = int(self.headers.get("Content-Length", 0))
+        # A negative length would make rfile.read() block until the client hangs up
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            length = -1
+        if length < 0:
+            self._json_response(_err(E.INVALID_ARGS, "invalid Content-Length"), 400)
+            return None
         if length > 10000:
             logger.warning(f"{label} request too large: {length} bytes")
             self._json_response(_err(E.BODY_TOO_LARGE, "request too large"), 413)

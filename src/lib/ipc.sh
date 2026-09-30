@@ -56,7 +56,7 @@ _get_multi() {
       ({};
        if ($resp.request_id and $props[$resp.request_id - 1]) then
          .[$props[$resp.request_id - 1]] =
-           (if (($resp.error // "success") == "success") then ($resp.data // "") else "" end)
+           (if (($resp.error // "success") == "success") and $resp.data != null then $resp.data else "" end)
        else . end)
   ' 2>/dev/null
 }
@@ -120,13 +120,6 @@ _wait_title() {
   [[ "$url" == http* || "$url" == *youtu* || "$url" == *youtube* ]] && initial_wait=1.5
   sleep "$initial_wait"
   _wait_prop media-title "$max"
-}
-
-# ── _ipc_cmd ────────────────────────────────────────────────────
-_ipc_cmd() {
-  local cmd_json
-  cmd_json=$("$JQ" -cn --args '{"command":$ARGS.positional}' -- "$@")
-  _silent_retry "$cmd_json"
 }
 
 # ── _ipc_loadfile ───────────────────────────────────────────────

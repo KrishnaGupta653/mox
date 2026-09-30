@@ -88,7 +88,9 @@ _search_ytdlp_stream() {
   # BUG FIX: was `return ${PIPESTATUS[0]:-$?}` — PIPESTATUS is only set after
   # a pipeline; this is a plain command so PIPESTATUS is unset → crash under
   # set -u. Just use $? which correctly holds yt-dlp's exit code.
-  "$YTDLP" "ytsearch${n}:${query}" \
+  # --flat-playlist reads title/duration from the results page instead of opening
+  # every video (~2s instead of ~15s for the same fields)
+  "$YTDLP" "ytsearch${n}:${query}" --flat-playlist \
     --print "%(title)s | %(duration_string)s | %(webpage_url)s" \
     --no-download --no-warnings 2>/dev/null
   return $?
@@ -168,35 +170,6 @@ _do_search() {
   return $rc
 }
 
-# ── _pick_async ─────────────────────────────────────────────────
-_pick_async() {
-  # Build the reload command — uses the same search priority
-  local search_cmd
-  if [[ -n "$YOUTUBE_API_KEY" ]]; then
-    # Fast path: API search inline (no yt-dlp spawn)
-    search_cmd="$0 _internal_search_api {q}"
-  else
-    # Slower but works without API key
-    search_cmd="\"$YTDLP\" \"ytsearch${SEARCH_RESULTS}:{q}\" --print '%(title)s | %(duration_string)s | %(webpage_url)s' --no-download --no-warnings 2>/dev/null || echo 'no results'"
-  fi
-
-  local result
-  result=$(FZF_DEFAULT_COMMAND="" "$FZF" \
-    --height 60% --reverse \
-    --prompt "🎵 " \
-    --header "Type to search YouTube · ENTER select · ESC cancel" \
-    --preview 'echo {} | sed "s/ | /\n/g"' \
-    --preview-window=down:3:wrap \
-    --ansi \
-    --disabled \
-    --query "" \
-    --bind "change:reload:$search_cmd 2>/dev/null || echo ''" \
-    --bind "start:reload:echo ''" \
-    2>/dev/null) || return 1
-
-  echo "$result" | awk -F ' \| ' '{print $NF}'
-}
-
 # ── _fzf_common ─────────────────────────────────────────────────
 _fzf_common() {
   local header="$1"
@@ -215,6 +188,15 @@ _pick() {
   local key="$CACHE_DIR/$(_cache_key "$query").cache"
   local fzf_out url fzf_rc
 
+  # No terminal (web UI, cron, scripts): take the top result instead of opening fzf,
+  # which would otherwise grab whatever terminal launched us or fail outright
+  if [[ ! -t 0 ]]; then
+    url=$(_do_search "$query" | grep -m1 -E 'https?://' | awk -F ' [|] ' '{print $NF}')
+    [[ -n "$url" ]] || { _err "no results for: $query"; return 1; }
+    echo "$url"
+    return 0
+  fi
+
   # Cache hit — instant
   if [ -f "$key" ] && [ "$(_cache_age "$key")" -lt "$CACHE_TTL" ]; then
     _info "instant results (cached)" >&2
@@ -224,7 +206,7 @@ _pick() {
     # not fzf's. ESC → fzf exits 130, but cat exits 0, so _pick wrongly
     # returned 0 with empty output and do_play would proceed with empty URL.
     (( fzf_rc != 0 )) && return 1
-    url=$(echo "$fzf_out" | awk -F ' \| ' '{print $NF}')
+    url=$(echo "$fzf_out" | awk -F ' [|] ' '{print $NF}')
     echo "$url"
     return 0
   fi
@@ -241,7 +223,7 @@ _pick() {
   # BUG FIX: pipeline `_do_search | fzf | awk` meant awk's rc (always 0) was
   # returned. Now we capture fzf's rc directly before awk runs.
   (( fzf_rc != 0 )) && return 1
-  url=$(echo "$fzf_out" | awk -F ' \| ' '{print $NF}')
+  url=$(echo "$fzf_out" | awk -F ' [|] ' '{print $NF}')
   echo "$url"
   return 0
 }

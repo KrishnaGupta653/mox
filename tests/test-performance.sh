@@ -313,7 +313,7 @@ echo -e "\n${YELLOW}🔍 Search Performance${NC}"
 
 # Test search operations (these may timeout due to network, but test the command parsing)
 if command -v yt-dlp >/dev/null 2>&1; then
-    run_performance_test "Search command parsing" "timeout 5s \"$MOX_SCRIPT\" search 'test query' || true" "$MEDIUM_THRESHOLD"
+    run_performance_test "Search command parsing" "timeout 10s \"$MOX_SCRIPT\" search 'test query' || true" "$SLOW_THRESHOLD"
 else
     echo -e "${BLUE}[PERF $((TESTS_RUN + 1))]${NC} Search command parsing"
     echo -e "  ${YELLOW}⚠️  SKIP${NC} - yt-dlp not available"
@@ -358,7 +358,7 @@ echo -e "\n${YELLOW}🎯 Edge Case Performance${NC}"
 
 # Test performance with edge cases
 run_performance_test "Empty playlist handling" "touch '$TEST_MUSIC_ROOT/playlists/empty.m3u' && \"$MOX_SCRIPT\" load empty || true" "$FAST_THRESHOLD"
-run_performance_test "Nonexistent playlist" "\"$MOX_SCRIPT\" load nonexistent_playlist_xyz" "$FAST_THRESHOLD"
+run_performance_test "Nonexistent playlist" "\"$MOX_SCRIPT\" load nonexistent_playlist_xyz || true" "$FAST_THRESHOLD"
 
 echo -e "\n${YELLOW}📊 Performance Summary${NC}"
 

@@ -311,7 +311,7 @@ run_test_with_output "log-clear" "timeout 3s \"$MOX_SCRIPT\" log-clear" "cleared
 echo -e "\n${YELLOW}📊 Statistics Commands${NC}"
 
 run_test_with_output "stats command" "timeout 5s \"$MOX_SCRIPT\" stats" "listening.*stats|total.*plays"
-run_test_with_output "history-stats" "timeout 5s \"$MOX_SCRIPT\" history-stats" "History.*statistics|interrupted.*system.*call|stats"
+run_test_with_output "history-stats" "timeout 5s \"$MOX_SCRIPT\" history-stats" "[Hh]istory.*statistics|no history yet|interrupted.*system.*call|stats"
 
 echo -e "\n${YELLOW}📌 Bookmark and Pin Commands${NC}"
 
@@ -379,7 +379,7 @@ run_test_with_output "completions command" "timeout 3s \"$MOX_SCRIPT\" completio
 run_test_with_output "invalid command" "timeout 3s \"$MOX_SCRIPT\" invalid_xyz_command" "Commands:|Usage:|starting.*daemon|searching.*yt-dlp|interrupted.*system.*call"
 
 # Test chapter navigation
-run_test_with_output "chapter command" "timeout 3s \"$MOX_SCRIPT\" chapter" "not.*running|chapters|No.*chapters|daemon.*socket.*exists.*but.*mpv.*is.*unresponsive"
+run_test_with_output "chapter command" "timeout 3s \"$MOX_SCRIPT\" chapter" "not.*running|nothing playing|chapters|No.*chapters|daemon.*socket.*exists.*but.*mpv.*is.*unresponsive"
 
 # Test queue deduplication
 run_test_with_output "queue-dedup" "timeout 3s \"$MOX_SCRIPT\" queue-dedup" "not.*running|queue.*empty|duplicates|daemon.*socket.*exists.*but.*mpv.*is.*unresponsive"

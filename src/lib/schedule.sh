@@ -47,7 +47,7 @@ do_schedule() {
   stamp=$(date +%Y%m%d%H%M%S)
   label="mox.schedule.${stamp}"
   script="$SCHEDULE_DIR/${label}.sh"
-  local mox_bin; mox_bin=$(command -v mox 2>/dev/null || printf '%s' "${0:a}")
+  local mox_bin; mox_bin=$(command -v mox 2>/dev/null || printf '%s' "${_MOX_SRC_DIR}/mox.sh")
   cat > "$script" <<EOF
 #!/bin/sh
 exec "$mox_bin" "$query"

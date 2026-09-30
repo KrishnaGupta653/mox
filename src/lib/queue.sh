@@ -61,10 +61,10 @@ _autodj_check() {
 
   local query="${similar_title:-$seed_title}"
   local results; results=$(_do_search "$query" 3) || return
-  local url; url=$(echo "$results" | head -1 | awk -F ' \| ' '{print $NF}')
+  local url; url=$(echo "$results" | head -1 | awk -F ' [|] ' '{print $NF}')
   [ -z "$url" ] && return
   _ipc_loadfile "$url" "append-play"
-  _info "Auto-DJ: added $(echo "$results" | head -1 | awk -F ' \| ' '{print $1}')" >&2
+  _info "Auto-DJ: added $(echo "$results" | head -1 | awk -F ' [|] ' '{t=$1; for(i=2;i<NF-1;i++) t=t" | "$i; print t}')" >&2
 }
 
 # ── do_queue_restore ────────────────────────────────────────────
@@ -112,7 +112,8 @@ do_queue_move() {
   (( $1 > 0 && $2 > 0 )) || { _err "qmove positions must be positive integers"; return 1; }
   _need
   local from=$(( $1 - 1 )) to=$(( $2 - 1 ))
-  _silent "{\"command\":[\"playlist-move\",${from},${to}]}"
+  [[ "$(_cmd "{\"command\":[\"playlist-move\",${from},${to}]}")" == *'"error":"success"'* ]] \
+    || { _err "no track at position $1 (see: mox queue)"; return 1; }
   _ok "moved track $1 → position $2"
 }
 
@@ -123,7 +124,8 @@ do_queue_remove() {
   (( $1 > 0 )) || { _err "qrm position must be a positive integer"; return 1; }
   _need
   local pos=$(( $1 - 1 ))
-  _silent "{\"command\":[\"playlist-remove\",${pos}]}"
+  [[ "$(_cmd "{\"command\":[\"playlist-remove\",${pos}]}")" == *'"error":"success"'* ]] \
+    || { _err "no track at position $1 (see: mox queue)"; return 1; }
   _ok "removed track $1 from queue"
 }
 

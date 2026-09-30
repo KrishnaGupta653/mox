@@ -116,14 +116,13 @@ FFPROBE="${FFPROBE:-}"
 # ── load user config ──────────────────────────────────────────
 
 # ── Load library modules ────────────────────────────────────────────────────
-_MOX_SRC_DIR="$(cd "$(dirname "${(%):-%N}")" && pwd)"
+_MOX_SRC_DIR="${${(%):-%N}:A:h}"
 _MOX_LIB_DIR="$_MOX_SRC_DIR/lib"
-MOX_LIB_ONLY=1
 for _mox_lib in core lock ipc search playback queue audio history playlist lyrics schedule ui; do
   # shellcheck source=/dev/null
   source "$_MOX_LIB_DIR/${_mox_lib}.sh" || { echo "Error: failed to load lib/${_mox_lib}.sh" >&2; exit 1; }
 done
-unset MOX_LIB_ONLY _mox_lib _MOX_LIB_DIR
+unset _mox_lib _MOX_LIB_DIR
 
 trap '_unlock "$LOCK_FILE" 2>/dev/null; _unlock "$HISTORY_LOCK" 2>/dev/null' EXIT
 
@@ -159,96 +158,97 @@ case "$1" in
   play)     shift; [ $# -eq 0 ] && _die "usage: mox play <query|url|file>";     do_play "$*";     exit $? ;;
   add)      shift; [ $# -eq 0 ] && _die "usage: mox add <query|url|file>";      do_add "$*";      exit $? ;;
   add-next) shift; [ $# -eq 0 ] && _die "usage: mox add-next <query|url|file>"; do_add_next "$*"; exit $? ;;
-  pause|pp)            do_pause;                   exit 0 ;;
-  next|mn)             do_next;                    exit 0 ;;
-  prev|mb)             do_prev;                    exit 0 ;;
-  stop)                do_stop;                    exit 0 ;;
-  start)               do_start;                   exit 0 ;;
-  shuffle)             do_shuffle;                 exit 0 ;;
-  repeat|rp)           do_repeat;                  exit 0 ;;
-  repeat-one|ro)       do_repeat_one;              exit 0 ;;
-  clear)               do_clear;                   exit 0 ;;
-  now)                 do_now;                     exit 0 ;;
-  bar|progress)        do_bar;                     exit 0 ;;
-  lyrics)              do_lyrics;                  exit 0 ;;
-  art)                 do_art;                     exit 0 ;;
-  ui)                  do_ui;                      exit 0 ;;
-  uxi)                 do_uxi;                     exit 0 ;;
-  uxi-stop)             do_uxi_stop;                 exit 0 ;;
-  scrub|slider)        do_scrub;                   exit 0 ;;
-  queue)               do_queue;                   exit 0 ;;
-  qmove)               do_queue_move "${2:-}" "${3:-}";    exit 0 ;;
-  qrm)                 do_queue_remove "${2:-}";       exit 0 ;;
-  status)              do_status;                  exit 0 ;;
-  hp|headphones)       do_hp;                      exit 0 ;;
-  sp|speakers)         do_sp;                      exit 0 ;;
-  devices)             do_devices;                 exit 0 ;;
-  playlists|pls)       do_playlists;               exit 0 ;;
-  save)                do_save "${2:-}";           exit 0 ;;
-  load)                do_load "${2:-}";           exit 0 ;;
-  pldel)               do_playlist_del "${2:-}";   exit 0 ;;
-  import)              do_import "${2:-}";         exit 0 ;;
-  dl)                  do_dl "${2:-}";             exit 0 ;;
-  dl-list)             do_dl_list;                 exit 0 ;;
-  txt)                 do_txt "${2:-}" "${3:-}";   exit 0 ;;
-  txts)                do_txts;                    exit 0 ;;
-  txtnext|tn)          do_txtnext;                 exit 0 ;;
-  txtprev|tp)          do_txtprev;                 exit 0 ;;
-  txtnow)              do_txtnow;                  exit 0 ;;
-  txtpick|tj)          do_txtpick;                 exit 0 ;;
-  txtedit|te)          do_txtedit "${2:-}";        exit 0 ;;
-  txt-export)          do_txt_export;              exit 0 ;;
-  vol|volume)          do_vol "${2:-}";            exit 0 ;;
-  seek)                do_seek "${2:-}";           exit 0 ;;
-  speed)               do_speed "${2:-}";          exit 0 ;;
-  like)                do_like;                    exit 0 ;;
-  unlike)              do_unlike;                  exit 0 ;;
-  likes)               do_likes;                   exit 0 ;;
-  likes-play|lp)       do_likes_play;              exit 0 ;;
-  love)                do_love;                    exit 0 ;;
-  similar)             do_similar;                 exit 0 ;;
-  smart)               do_smart;                   exit 0 ;;
-  history|hist)        do_history;                 exit 0 ;;
-  history-clear)       do_history_clear;           exit 0 ;;
-  replay|rl)           do_replay;                  exit 0 ;;
-  eq)                  if [[ "${2:-}" == "custom" ]]; then do_eq_custom "$@"; else do_eq "${2:-}"; fi; exit 0 ;;
-  crossfade)            do_crossfade "${2:-}";     exit 0 ;;
-  queue-dedup)          do_queue_dedup;           exit 0 ;;
-  pin)                 do_pin "${2:-}";            exit 0 ;;
-  pins)                do_pins;                   exit 0 ;;
-  queue-save-auto)      do_queue_save_auto;       exit 0 ;;
-  search)              shift; do_search_only "$@"; exit 0 ;;
-  radio)               do_radio "${2:-}";         exit 0 ;;
-  chapter)              do_chapter;               exit 0 ;;
-  stats)               do_stats;                  exit 0 ;;
-  config-edit)         do_config_edit;           exit 0 ;;
-  notify-toggle)        do_notify_toggle;          exit 0 ;;
-  auto-restart-toggle)  do_auto_restart_toggle;     exit 0 ;;
-  history-stats)       do_history_stats;          exit 0 ;;
-  completions)         do_completions;            exit 0 ;;
-  norm)                do_norm;                    exit 0 ;;
-  sleep)               do_sleep "${2:-}";          exit 0 ;;
-  export)              do_export "${2:-}";         exit 0 ;;
-  update)              do_update;                  exit 0 ;;
-  doctor)              do_doctor;                  exit 0 ;;
-  queue-restore|qr)    do_queue_restore;           exit 0 ;;
-  log)                 do_log;                     exit 0 ;;
-  log-clear)           do_log_clear;               exit 0 ;;
-  cache-clear)         do_cache_clear;             exit 0 ;;
-  cache-prune)         do_cache_prune;             exit 0 ;;
-  cache-stats)         do_cache_stats;             exit 0 ;;
-  autodj)              do_autodj;                  exit 0 ;;
-  bookmark)            do_bookmark "${2:-}";       exit 0 ;;
-  bookmarks)           do_bookmarks;               exit 0 ;;
-  bookmark-load|bl)    do_bookmark_load;           exit 0 ;;
-  index)               do_index;                   exit 0 ;;
-  local)               do_local "${2:-}";          exit 0 ;;
-  scan)                do_scan "${2:-}" "${3:-}";  exit 0 ;;
-  share)               do_share "${2:-}";          exit 0 ;;
-  schedule)            do_schedule "${2:-}" "${3:-}"; exit 0 ;;
-  reload-config)       do_reload_config;           exit 0 ;;
-  cast)                do_cast;                    exit 0 ;;
-  help|-h|--help)      do_help;                    exit 0 ;;
+  pause|pp)            do_pause;                   exit $? ;;
+  next|mn)             do_next;                    exit $? ;;
+  prev|mb)             do_prev;                    exit $? ;;
+  stop)                do_stop;                    exit $? ;;
+  start)               do_start;                   exit $? ;;
+  restart)             do_stop; do_start;          exit $? ;;
+  shuffle)             do_shuffle;                 exit $? ;;
+  repeat|rp)           do_repeat;                  exit $? ;;
+  repeat-one|ro)       do_repeat_one;              exit $? ;;
+  clear)               do_clear;                   exit $? ;;
+  now)                 do_now;                     exit $? ;;
+  bar|progress)        do_bar;                     exit $? ;;
+  lyrics)              do_lyrics;                  exit $? ;;
+  art)                 do_art;                     exit $? ;;
+  ui)                  do_ui;                      exit $? ;;
+  uxi)                 do_uxi;                     exit $? ;;
+  uxi-stop)             do_uxi_stop;                 exit $? ;;
+  scrub|slider)        do_scrub;                   exit $? ;;
+  queue)               do_queue;                   exit $? ;;
+  qmove)               do_queue_move "${2:-}" "${3:-}";    exit $? ;;
+  qrm)                 do_queue_remove "${2:-}";       exit $? ;;
+  status)              do_status;                  exit $? ;;
+  hp|headphones)       do_hp;                      exit $? ;;
+  sp|speakers)         do_sp;                      exit $? ;;
+  devices)             do_devices;                 exit $? ;;
+  playlists|pls)       do_playlists;               exit $? ;;
+  save)                do_save "${2:-}";           exit $? ;;
+  load)                do_load "${2:-}";           exit $? ;;
+  pldel)               do_playlist_del "${2:-}";   exit $? ;;
+  import)              do_import "${2:-}";         exit $? ;;
+  dl)                  do_dl "${2:-}";             exit $? ;;
+  dl-list)             do_dl_list;                 exit $? ;;
+  txt)                 do_txt "${2:-}" "${3:-}";   exit $? ;;
+  txts)                do_txts;                    exit $? ;;
+  txtnext|tn)          do_txtnext;                 exit $? ;;
+  txtprev|tp)          do_txtprev;                 exit $? ;;
+  txtnow)              do_txtnow;                  exit $? ;;
+  txtpick|tj)          do_txtpick;                 exit $? ;;
+  txtedit|te)          do_txtedit "${2:-}";        exit $? ;;
+  txt-export)          do_txt_export;              exit $? ;;
+  vol|volume)          do_vol "${2:-}";            exit $? ;;
+  seek)                do_seek "${2:-}";           exit $? ;;
+  speed)               do_speed "${2:-}";          exit $? ;;
+  like)                do_like;                    exit $? ;;
+  unlike)              do_unlike;                  exit $? ;;
+  likes)               do_likes;                   exit $? ;;
+  likes-play|lp)       do_likes_play;              exit $? ;;
+  love)                do_love;                    exit $? ;;
+  similar)             do_similar;                 exit $? ;;
+  smart)               do_smart;                   exit $? ;;
+  history|hist)        do_history;                 exit $? ;;
+  history-clear)       do_history_clear;           exit $? ;;
+  replay|rl)           do_replay;                  exit $? ;;
+  eq)                  if [[ "${2:-}" == "custom" ]]; then do_eq_custom "$@"; else do_eq "${2:-}"; fi; exit $? ;;
+  crossfade)            do_crossfade "${2:-}";     exit $? ;;
+  queue-dedup)          do_queue_dedup;           exit $? ;;
+  pin)                 do_pin "${2:-}";            exit $? ;;
+  pins)                do_pins;                   exit $? ;;
+  queue-save-auto)      do_queue_save_auto;       exit $? ;;
+  search)              shift; do_search_only "$@"; exit $? ;;
+  radio)               do_radio "${2:-}";         exit $? ;;
+  chapter)              do_chapter;               exit $? ;;
+  stats)               do_stats;                  exit $? ;;
+  config|config-edit)  do_config_edit;           exit $? ;;
+  notify-toggle)        do_notify_toggle;          exit $? ;;
+  auto-restart-toggle)  do_auto_restart_toggle;     exit $? ;;
+  history-stats)       do_history_stats;          exit $? ;;
+  completions)         do_completions;            exit $? ;;
+  norm)                do_norm;                    exit $? ;;
+  sleep)               do_sleep "${2:-}";          exit $? ;;
+  export)              do_export "${2:-}";         exit $? ;;
+  update)              do_update;                  exit $? ;;
+  doctor)              do_doctor;                  exit $? ;;
+  queue-restore|qr)    do_queue_restore;           exit $? ;;
+  log)                 do_log;                     exit $? ;;
+  log-clear)           do_log_clear;               exit $? ;;
+  cache-clear)         do_cache_clear;             exit $? ;;
+  cache-prune)         do_cache_prune;             exit $? ;;
+  cache-stats)         do_cache_stats;             exit $? ;;
+  autodj)              do_autodj;                  exit $? ;;
+  bookmark)            do_bookmark "${2:-}";       exit $? ;;
+  bookmarks)           do_bookmarks;               exit $? ;;
+  bookmark-load|bl)    do_bookmark_load;           exit $? ;;
+  index)               do_index;                   exit $? ;;
+  local)               do_local "${2:-}";          exit $? ;;
+  scan)                do_scan "${2:-}" "${3:-}";  exit $? ;;
+  share)               do_share "${2:-}";          exit $? ;;
+  schedule)            do_schedule "${2:-}" "${3:-}"; exit $? ;;
+  reload-config)       do_reload_config;           exit $? ;;
+  cast)                do_cast;                    exit $? ;;
+  help|-h|--help)      do_help "${2:-}";           exit $? ;;
 esac
 
 # ── Free-form query with optional flags ───────────────────────
@@ -273,6 +273,31 @@ for arg in "$@"; do
 done
 
 [ ${#QUERY_ARGS[@]} -eq 0 ] && _die "no query — usage: mox \"song name\"  or  mox help"
+
+# A one-word query that is a typo of a command ("pasue", "nxet", "shufle") would otherwise
+# search YouTube and start playing something random. Only catch unambiguous slips: two swapped
+# letters, or one letter missing/extra on commands of 5+ letters, so real words like "top" still play.
+_typo_of() {
+  local w="$1" c="$2" i
+  if (( ${#w} == ${#c} && ${#c} >= 4 )); then
+    for (( i = 1; i < ${#c}; i++ )); do
+      [[ "${c[1,i-1]}${c[i+1]}${c[i]}${c[i+2,-1]}" == "$w" ]] && return 0
+    done
+  elif (( ${#c} >= 5 && ${#w} == ${#c} - 1 )); then
+    for (( i = 1; i <= ${#c}; i++ )); do [[ "${c[1,i-1]}${c[i+1,-1]}" == "$w" ]] && return 0; done
+  elif (( ${#c} >= 5 && ${#w} == ${#c} + 1 )); then
+    for (( i = 1; i <= ${#w}; i++ )); do [[ "${w[1,i-1]}${w[i+1,-1]}" == "$c" ]] && return 0; done
+  fi
+  return 1
+}
+if (( ${#QUERY_ARGS[@]} == 1 )) && [[ "${QUERY_ARGS[1]}" =~ '^[a-z]+$' ]]; then
+  for _cmd in pause next prev stop start restart shuffle repeat clear lyrics queue status volume \
+              seek speed like likes history playlists save load devices headphones \
+              speakers doctor help search radio sleep update bookmarks similar; do
+    _typo_of "${QUERY_ARGS[1]}" "$_cmd" && \
+      _die "unknown command: ${QUERY_ARGS[1]} — did you mean: mox $_cmd ?   (to search for it: mox play ${QUERY_ARGS[1]})"
+  done
+fi
 
 QUERY="${(j: :)QUERY_ARGS}"
 

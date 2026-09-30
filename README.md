@@ -122,7 +122,7 @@ mox prev     # or mox mb
 mox vol 80   # Set volume to 80%
 
 # View current status
-mox status   # or mox bar
+mox status   # snapshot · mox bar for a live progress bar
 ```
 
 ## 🌐 Web Interface
@@ -161,7 +161,7 @@ mox seek <time>         # Seek to position (e.g., +30, -10, 1:30)
 mox vol <level>         # Set volume (0-100)
 mox vol +/-<amount>     # Adjust volume relatively
 mox speed <rate>        # Set playback speed (0.5-2.0)
-mox eq                  # Open equalizer
+mox eq <preset>         # flat, bass, treble, vocal, loud
 mox norm                # Normalize audio
 ```
 
@@ -191,7 +191,7 @@ mox autodj              # Toggle Auto-DJ mode
 mox save <name>         # Save current queue as playlist
 mox load <name>         # Load playlist
 mox playlists           # List all playlists
-mox playlist <name>     # Show playlist contents
+mox pldel <name>        # Delete playlist
 ```
 
 ### History & Likes
@@ -206,19 +206,21 @@ mox export              # Export data to CSV
 ### Information
 
 ```bash
-mox status              # Current track info (alias: bar)
+mox status              # Current track, queue and modes
+mox now                 # One-line now playing
+mox bar                 # Live progress bar
 mox lyrics              # Show synchronized lyrics
 mox art                 # Display album art in terminal
-mox info                # Detailed track information
 ```
 
 ### System
 
 ```bash
 mox start               # Start mpv daemon
-mox kill                # Stop mpv daemon
+mox stop                # Stop playback and the mpv daemon
 mox restart             # Restart mpv daemon
 mox config              # Edit configuration
+mox doctor              # Check dependencies and diagnose problems
 mox index               # Scan local music library
 ```
 
@@ -276,8 +278,8 @@ MUSIC_ROOT="$HOME/music_system"
 Save and restore complete queue states:
 
 ```bash
-mox bookmark save "party-mix"    # Save current state
-mox bookmark load "party-mix"    # Restore queue and position
+mox bookmark "party-mix"         # Bookmark current track and position
+mox bookmark-load                # Pick a bookmark to restore (alias: bl)
 mox bookmarks                    # List all bookmarks
 ```
 
@@ -302,12 +304,14 @@ mox local "artist name"          # Search local library
 ### Keyboard Shortcuts (Web UI)
 
 - `Space` - Play/Pause
-- `→` / `←` - Next/Previous track
-- `↑` / `↓` - Volume up/down
-- `M` - Mute toggle
-- `L` - Toggle lyrics
-- `T` - Toggle theme
-- `F` - Toggle fullscreen
+- `n` / `b` - Next/Previous track
+- `→` / `←` or `.` / `,` - Seek ±10s
+- `↑` / `↓` or `+` / `-` - Volume up/down
+- `s` / `r` - Shuffle / repeat
+- `l` - Lyrics
+- `/` - Focus the command bar
+- `Ctrl/⌘ K` - Command palette
+- `?` - Show all shortcuts
 
 ## 🐛 Troubleshooting
 
@@ -316,7 +320,8 @@ mox local "artist name"          # Search local library
 **mpv not starting:**
 
 ```bash
-mox kill && mox start    # Restart mpv daemon
+mox restart              # Restart mpv daemon
+mox doctor               # Shows which dependency or setting is wrong
 ```
 
 **Web UI not accessible:**

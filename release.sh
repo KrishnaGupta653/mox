@@ -28,7 +28,9 @@ npm version "$NEW_VERSION" --no-git-tag-version --allow-same-version >/dev/null
 # mox --version/help/doctor and the web UI read VERSION at runtime; the README badge reads npm.
 _sed "s|archive/v[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz|archive/v$NEW_VERSION.tar.gz|g" packaging/homebrew/mox-cli.rb
 
-if ! grep -qF "## [$NEW_VERSION]" CHANGELOG.md; then
+if grep -q '^## \[Unreleased\]' CHANGELOG.md; then
+    _sed "s/^## \[Unreleased\].*/## [$NEW_VERSION] - $TODAY/" CHANGELOG.md
+elif ! grep -qF "## [$NEW_VERSION]" CHANGELOG.md; then
     tmp="$(mktemp)"
     awk -v v="$NEW_VERSION" -v d="$TODAY" '
         !done && /^## \[/ { print "## [" v "] - " d "\n\n### Changed\n- TODO: describe this release\n"; done = 1 }

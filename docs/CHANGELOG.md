@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [8.0.5] - 2026-10-01
+
+### Fixed
+- **Web UI search / schedules / `mox schedule`**: text queries run without a terminal now play the top result instead of opening fzf (which failed or grabbed the launching terminal)
+- **Web UI EQ**: preset buttons actually apply the EQ, and show the preset mpv is really using (follows `mox eq` from the terminal, resets after a restart)
+- **Web UI sleep timer**: no longer toggles playback back on when it fires
+- **Web UI**: controls report "player isn't running" / "no next track" instead of fake success; a crashed mpv shows as stopped and the UI reconnects when it's back
+- **Web UI**: song titles with `&` or `$` ("Rock & Roll", "Ke$ha") are accepted
+- **Web UI**: one stalled browser tab can no longer freeze live updates for every other tab
+- **Search**: titles containing ` | ` keep their full title and duration; `mox search` columns were split on every space by macOS awk
+- **`mox repeat` / `mox repeat-one`**: a second toggle turns repeat off (it cycled to `force` and kept looping)
+- **`mox status`**: a stale socket from a crashed mpv shows "stopped" instead of an empty "running" box
+- **`mox qmove` / `mox qrm`**: out-of-range positions are an error instead of a false "moved"/"removed"
+- **`mox history-stats`**: no bogus `1x ()` row for malformed history lines
+- **`mox ui` / `mox uxi` / `mox schedule`**: work when mox is installed (they used a zsh function name as the script path)
+- **Server**: malformed `Content-Length` is rejected immediately; hung yt-dlp searches are killed after 60s
+
+### Changed
+- **Exit codes**: every command exits non-zero when it fails (previously most always exited 0)
+- **Search is ~8x faster** (about 2s instead of 15–30s): yt-dlp reads results with `--flat-playlist`
+- **Faster CLI**: `mox --version` 160→59 ms, `mox status` 362→75 ms, `mox pause` 233→134 ms
+- **`mox help`** shows a short page; `mox help all` lists every command. New `mox restart`; `mox config` is an alias of `config-edit`
+- **Typos**: `mox pasue` suggests `mox pause` instead of searching YouTube for "pasue"
+- **Missing dependencies** are named, with the install command
+- **Web UI accessibility**: visible focus rings, labelled controls, screen-reader announcements, real dialogs that restore focus, keyboard tabs / seek bars / queue rows, readable contrast for muted text and lyrics, reduced-motion support
+- **Web UI command bar** only offers commands the server accepts; `play` / `add` / `add-next` work from it
+- **Web UI** polls less while the tab is hidden and updates lyrics in place
+
 ## [8.0.3] - 2026-10-01
 
 8.0.2 was tagged but never published (Linux CI failed); its changes ship here.

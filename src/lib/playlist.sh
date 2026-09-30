@@ -544,7 +544,7 @@ do_txt() {
 
       # Fall back to yt-dlp
       if [[ -z "$results" ]]; then
-        results=$("$ytdlp" "ytsearch${search_n}:${query}" \
+        results=$("$ytdlp" "ytsearch${search_n}:${query}" --flat-playlist \
           --print "%(title)s | %(duration_string)s | %(webpage_url)s" \
           --no-download --no-warnings 2>/dev/null | head -1)
       fi
@@ -581,7 +581,7 @@ do_txt() {
         _progress_add
         [ -z "$result" ] && exit 0
         local url
-        url=$(echo "$result" | head -1 | awk -F ' \| ' '{print $NF}')
+        url=$(echo "$result" | head -1 | awk -F ' [|] ' '{print $NF}')
         [ -z "$url" ] && exit 0
         echo "$url" > "$tmpdir/$i"
       ) &

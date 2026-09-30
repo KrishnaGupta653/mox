@@ -80,14 +80,12 @@ C=$'\e[0;36m'; W=$'\e[1;37m'; M=$'\e[0;35m'; X=$'\e[0m'
 DIM=$'\e[2m'; BOLD=$'\e[1m'
 
 # ── _os ─────────────────────────────────────────────────────────
-_os() {
-  case "$(uname -s)" in
-    Darwin) echo "mac" ;;
-    Linux)  echo "linux" ;;
-    *)      echo "unknown" ;;
-  esac
-}
-OS=$(_os)
+# $OSTYPE is built into zsh, so this runs on every command without forking uname
+case "$OSTYPE" in
+  darwin*) OS=mac ;;
+  linux*)  OS=linux ;;
+  *)       OS=unknown ;;
+esac
 
 # ── _mtime ──────────────────────────────────────────────────────
 _mtime() {
@@ -130,9 +128,14 @@ _ensure_bin() {
 
 # ── _bootstrap ──────────────────────────────────────────────────
 _bootstrap() {
-  mkdir -p "$SOCKET_DIR" "$CACHE_DIR" "$PLAYLIST_DIR" \
-           "$TXTS_DIR" "$DOWNLOADS_DIR" "$DATA_DIR" "$LOCK_DIR" "$PLUGINS_DIR" \
-           "$SHARE_DIR" "$SCHEDULE_DIR"
+  local -a missing_dirs
+  local d
+  for d in "$SOCKET_DIR" "$CACHE_DIR" "$PLAYLIST_DIR" "$TXTS_DIR" "$DOWNLOADS_DIR" \
+           "$DATA_DIR" "$LOCK_DIR" "$PLUGINS_DIR" "$SHARE_DIR" "$SCHEDULE_DIR"; do
+    [[ -d "$d" ]] || missing_dirs+=("$d")
+  done
+  # Runs on every command: only fork mkdir when something is actually missing
+  (( ${#missing_dirs} )) && mkdir -p "${missing_dirs[@]}"
   [[ ! -f "$LIKES_FILE" ]]   && touch "$LIKES_FILE"
   [[ ! -f "$HISTORY_FILE" ]] && touch "$HISTORY_FILE"
   [[ ! -f "$BOOKMARKS_FILE" ]] && touch "$BOOKMARKS_FILE"
@@ -206,15 +209,12 @@ _check_deps() {
   _ensure_bin CHAFA  chafa
   _ensure_bin FFPROBE ffprobe
 
-  local missing=0
-  for bin in "$MPV" "$SOCAT" "$JQ"; do
-    if [[ -z "$bin" || ! -x "$bin" ]]; then
-      _warn "missing binary: ${bin:-<unresolved>}"
-      missing=1
-    fi
-  done
-  if [[ $missing -eq 1 ]]; then
-    _die 2 "install missing deps:\n  macOS: brew install mpv socat jq\n  Linux: sudo apt install mpv socat jq"
+  local -a missing=()
+  [[ -x "$MPV" ]]   || missing+=(mpv)
+  [[ -x "$SOCAT" ]] || missing+=(socat)
+  [[ -x "$JQ" ]]    || missing+=(jq)
+  if (( ${#missing} )); then
+    _die 2 "missing: ${missing[*]}\n  macOS: brew install ${missing[*]}\n  Linux: sudo apt install ${missing[*]}"
   fi
   # Optional deps are checked by the specific commands that need them.
 }

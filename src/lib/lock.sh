@@ -77,8 +77,10 @@ _unlock() {
     unset "_MOX_LOCK_FDS[$lf]"
     return
   fi
-  local stored_pid; stored_pid=$(cat "$lf" 2>/dev/null)
-  if [[ "$stored_pid" == "$$" ]]; then
+  # Called from the EXIT trap on every command; skip the read when no lock file exists
+  [[ -f "$lf" ]] || return 0
+  local stored_pid; stored_pid="$(<"$lf")" 2>/dev/null
+  if [[ "${stored_pid//[[:space:]]/}" == "$$" ]]; then
     rm -f "$lf"
     rmdir "${lf}.d" 2>/dev/null
   fi

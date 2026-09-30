@@ -63,7 +63,8 @@
         --glass-border: rgba(255, 255, 255, 0.06);
         --glass-blur: 20px;
         --text: #e8e8f0;
-        --muted: #555566;
+        /* muted is body text: keep >= 4.5:1 on bg/surface/surface2 (WCAG AA) */
+        --muted: #8a8a9c;
         --dim: #333340;
       }
 
@@ -76,7 +77,7 @@
         --accent2: #008a6e;
         --accent3: #c41e3a;
         --text: #1d1d1f;
-        --muted: #6e6e73;
+        --muted: #636368;
         --dim: #aeaeb2;
       }
 
@@ -179,6 +180,8 @@
       }
 
       .logo {
+        margin: 0;
+        font-weight: normal;
         font-family: "DM Serif Display", serif;
         font-size: 28px;
         letter-spacing: -1px;
@@ -677,7 +680,7 @@
       }
 
       .queue-filter::placeholder {
-        color: var(--dim);
+        color: var(--muted);
       }
 
       .queue-item {
@@ -878,10 +881,6 @@
         transform: translateX(4px);
       }
 
-      .lyric-line.past {
-        color: var(--dim);
-      }
-
       /* ── MINI STATS ── */
       .stats-grid {
         display: grid;
@@ -941,7 +940,7 @@
       }
 
       .cmd-input::placeholder {
-        color: var(--dim);
+        color: var(--muted);
       }
 
       .cmd-hints {
@@ -960,6 +959,7 @@
         cursor: pointer;
         transition: all 0.15s;
         letter-spacing: 0.5px;
+        font-family: inherit;
       }
 
       .cmd-hint:hover {
@@ -1351,6 +1351,23 @@
         min-width: 0;
       }
 
+      /* Must come after the component rules that set outline: none */
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
       @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
@@ -1560,7 +1577,7 @@
     <div class="layout">
       <!-- HEADER -->
       <header class="header">
-        <div class="logo">
+        <h1 class="logo">
           mox<span
             >terminal music CLI v__MOX_VERSION__ ·
             <kbd
@@ -1576,7 +1593,7 @@
             >
             to open</span
           >
-        </div>
+        </h1>
         <div class="header-right">
           <button
             class="theme-toggle"
@@ -1619,13 +1636,8 @@
             🌙
           </button>
           <div class="status-badge">
-            <div
-              class="status-dot"
-              id="status-dot"
-              role="status"
-              aria-live="polite"
-            ></div>
-            <span id="daemon-status">connecting…</span>
+            <div class="status-dot" id="status-dot" aria-hidden="true"></div>
+            <span id="daemon-status" role="status">connecting…</span>
           </div>
         </div>
       </header>
@@ -1668,8 +1680,16 @@
           <div
             class="progress-wrap"
             id="progress-wrap"
+            role="slider"
+            tabindex="0"
+            aria-label="Seek"
+            aria-valuemin="0"
+            aria-valuemax="0"
+            aria-valuenow="0"
+            aria-valuetext="0:00 of 0:00"
             onclick="seekClick(event)"
             ontouchend="seekClick(event)"
+            onkeydown="seekKey(event)"
           >
             <div class="progress-track">
               <div
@@ -1694,7 +1714,7 @@
             id="visualizer"
             width="320"
             height="54"
-            aria-label="Frequency visualizer"
+            aria-hidden="true"
           ></canvas>
 
           <!-- Controls -->
@@ -1704,6 +1724,7 @@
               onclick="cmd('repeat')"
               id="btn-repeat"
               title="Toggle repeat (mox repeat)"
+              aria-label="Toggle repeat"
             >
               🔁
             </button>
@@ -1711,10 +1732,11 @@
               class="ctrl-btn"
               onclick="cmd('prev')"
               title="Previous (mox prev)"
+              aria-label="Previous track"
             >
               ⏮
             </button>
-            <button class="ctrl-btn" onclick="cmd('seek -10')" title="Back 10s">
+            <button class="ctrl-btn" onclick="cmd('seek -10')" title="Back 10s" aria-label="Back 10 seconds">
               ⏪
             </button>
             <button
@@ -1722,6 +1744,7 @@
               id="play-btn"
               onclick="cmd('pause')"
               title="Play/Pause (mox pause)"
+              aria-label="Play or pause"
             >
               ▶
             </button>
@@ -1729,6 +1752,7 @@
               class="ctrl-btn"
               onclick="cmd('seek +10')"
               title="Forward 10s"
+              aria-label="Forward 10 seconds"
             >
               ⏩
             </button>
@@ -1736,6 +1760,7 @@
               class="ctrl-btn"
               onclick="cmd('next')"
               title="Next (mox next)"
+              aria-label="Next track"
             >
               ⏭
             </button>
@@ -1744,6 +1769,7 @@
               id="like-btn"
               onclick="cmd('like')"
               title="Like track (mox like)"
+              aria-label="Like this track"
             >
               ♡
             </button>
@@ -1751,18 +1777,19 @@
 
           <!-- Volume -->
           <div class="volume-row">
-            <span>🔈</span>
+            <span aria-hidden="true">🔈</span>
             <input
               type="range"
               class="vol-slider"
               id="vol-slider"
+              aria-label="Volume"
               min="0"
               max="150"
               value="80"
               oninput="setVolume(this.value)"
             />
             <span id="vol-val">80%</span>
-            <span>🔊</span>
+            <span aria-hidden="true">🔊</span>
           </div>
 
           <div class="speed-row">
@@ -1966,7 +1993,7 @@
           </div>
           <input
             class="queue-filter"
-            id="queue-filter"
+            id="queue-filter" aria-label="Filter queue"
             placeholder="filter queue"
             oninput="updateQueue()"
           />
@@ -1990,7 +2017,7 @@
           <div class="search-box">
             <input
               class="search-input"
-              id="search-input"
+              id="search-input" aria-label="Search for a song"
               placeholder="type a song name..."
               oninput="liveSuggest(this.value)"
               onkeydown="
@@ -2019,7 +2046,7 @@
             </button>
             <button
               class="eq-btn"
-              onclick="clearSearch()"
+              onclick="clearSearch()" aria-label="Clear search"
               title="Clear"
               style="padding: 0 8px"
             >
@@ -2062,7 +2089,7 @@
           </div>
           <input
             class="queue-filter"
-            id="history-filter"
+            id="history-filter" aria-label="Filter history"
             placeholder="filter history"
             oninput="filterHistory(this.value)"
             style="margin-bottom: 10px"
@@ -2107,13 +2134,14 @@
             <div
               style="
                 display: grid;
-                grid-template-columns: 1fr 1fr;
+                grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
                 gap: 8px;
                 margin-bottom: 10px;
               "
             >
               <div>
                 <label
+                  for="sched-time"
                   style="
                     font-size: 11px;
                     color: var(--muted);
@@ -2139,6 +2167,7 @@
               </div>
               <div>
                 <label
+                  for="sched-query"
                   style="
                     font-size: 11px;
                     color: var(--muted);
@@ -2190,23 +2219,10 @@
                 />
                 repeat daily
               </label>
-              <label
-                style="
-                  font-size: 12px;
-                  color: var(--muted);
-                  display: flex;
-                  align-items: center;
-                  gap: 6px;
-                  cursor: pointer;
-                "
-              >
-                <input
-                  type="checkbox"
-                  id="sched-fade"
-                  style="accent-color: var(--accent)"
-                />
-                fade in
-              </label>
+              <span style="font-size: 11px; color: var(--muted)">
+                runs while this page is open · for unattended alarms use
+                <code>mox schedule</code>
+              </span>
             </div>
             <button class="eq-btn" style="width: 100%" onclick="addSchedule()">
               &#9654; schedule
@@ -2255,28 +2271,31 @@
             <button
               class="eq-btn active"
               id="eq-flat"
-              onclick="applyEqPreset('flat')"
+              aria-pressed="true"
+              onclick="setEq('flat')"
             >
               flat
             </button>
-            <button class="eq-btn" id="eq-bass" onclick="applyEqPreset('bass')">
+            <button class="eq-btn" id="eq-bass" aria-pressed="false" onclick="setEq('bass')">
               bass boost
             </button>
             <button
               class="eq-btn"
               id="eq-treble"
-              onclick="applyEqPreset('treble')"
+              aria-pressed="false"
+              onclick="setEq('treble')"
             >
               treble
             </button>
             <button
               class="eq-btn"
               id="eq-vocal"
-              onclick="applyEqPreset('vocal')"
+              aria-pressed="false"
+              onclick="setEq('vocal')"
             >
               vocal
             </button>
-            <button class="eq-btn" id="eq-loud" onclick="applyEqPreset('loud')">
+            <button class="eq-btn" id="eq-loud" aria-pressed="false" onclick="setEq('loud')">
               loudness
             </button>
             <button class="eq-btn" id="eq-norm" onclick="cmd('norm')">
@@ -2377,11 +2396,12 @@
       </main>
 
       <!-- COMMAND BAR -->
-      <div class="cmd-bar">
+      <section class="cmd-bar" aria-label="Command bar">
         <span class="cmd-prefix">mox</span>
         <input
           class="cmd-input"
           id="cmd-input"
+          aria-label="Command or search"
           placeholder='search & play: "lofi beats"  or  pause · next · vol 80 · seek +10 · shuffle · repeat'
           onkeydown="handleCmd(event)"
           oninput="updateCommandSuggestions()"
@@ -2393,23 +2413,16 @@
         >
         <div class="cmd-suggestions" id="cmd-suggestions"></div>
         <div class="cmd-hints">
-          <span class="cmd-hint" onclick="quickPlay('lofi hip hop')">lofi</span>
-          <span class="cmd-hint" onclick="quickPlay('jazz classics')"
-            >jazz</span
-          >
-          <span class="cmd-hint" onclick="quickPlay('synthwave')">synth</span>
-          <span class="cmd-hint" onclick="cmd('repeat')">🔁</span>
-          <span class="cmd-hint" onclick="cmd('shuffle')">🔀</span>
-          <span
-            class="cmd-hint"
-            onclick="document.getElementById('cmd-input').focus()"
-            >/ focus</span
-          >
+          <button type="button" class="cmd-hint" onclick="quickPlay('lofi hip hop')">lofi</button>
+          <button type="button" class="cmd-hint" onclick="quickPlay('jazz classics')">jazz</button>
+          <button type="button" class="cmd-hint" onclick="quickPlay('synthwave')">synth</button>
+          <button type="button" class="cmd-hint" onclick="cmd('repeat')" aria-label="Toggle repeat">🔁</button>
+          <button type="button" class="cmd-hint" onclick="cmd('shuffle')" aria-label="Shuffle queue">🔀</button>
         </div>
-      </div>
+      </section>
     </div>
 
-    <div class="bottom-player" id="bottom-player">
+    <div class="bottom-player" id="bottom-player" role="region" aria-label="Mini player">
       <div class="bottom-track">
         <div class="bottom-art" aria-hidden="true"></div>
         <div style="min-width: 0">
@@ -2418,24 +2431,33 @@
         </div>
       </div>
       <div class="bottom-controls">
-        <button class="ctrl-btn" onclick="cmd('prev')" title="Previous">
+        <button class="ctrl-btn" onclick="cmd('prev')" title="Previous" aria-label="Previous track">
           ⏮
         </button>
         <button
           class="ctrl-btn primary"
-          id="bottom-play-btn"
+          id="bottom-play-btn" aria-label="Play or pause"
           onclick="cmd('pause')"
           title="Play/Pause"
         >
           ▶
         </button>
-        <button class="ctrl-btn" onclick="cmd('next')" title="Next">⏭</button>
+        <button class="ctrl-btn" onclick="cmd('next')" title="Next" aria-label="Next track">⏭</button>
       </div>
       <div class="bottom-progress">
         <div
           class="progress-track"
+          id="bottom-seek"
+          role="slider"
+          tabindex="0"
+          aria-label="Seek"
+          aria-valuemin="0"
+          aria-valuemax="0"
+          aria-valuenow="0"
+          aria-valuetext="0:00 of 0:00"
           onclick="seekClick(event)"
           ontouchend="seekClick(event)"
+          onkeydown="seekKey(event)"
         >
           <div
             class="progress-buffer"
@@ -2461,8 +2483,15 @@
       id="shortcut-overlay"
       onclick="toggleShortcutOverlay(event)"
     >
-      <div class="shortcut-modal" onclick="event.stopPropagation()">
-        <h2>⌨ Keyboard shortcuts</h2>
+      <div
+        class="shortcut-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="shortcut-title"
+        tabindex="-1"
+        onclick="event.stopPropagation()"
+      >
+        <h2 id="shortcut-title">⌨ Keyboard shortcuts</h2>
         <div class="shortcut-grid">
           <div class="shortcut-item">
             <span class="shortcut-key">Space</span
@@ -2537,17 +2566,24 @@
     </div>
 
     <!-- Toast -->
-    <div class="toast-stack" id="toast-stack"></div>
+    <div class="toast-stack" id="toast-stack" role="status" aria-live="polite"></div>
 
     <div
       class="command-palette"
       id="command-palette"
       onclick="closeCommandPalette(event)"
     >
-      <div class="palette-box" onclick="event.stopPropagation()">
+      <div
+        class="palette-box"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+        onclick="event.stopPropagation()"
+      >
         <input
           class="palette-input"
           id="palette-input"
+          aria-label="Search commands, queue, or music to play"
           placeholder="Search commands, queue, or type music to play"
           oninput="renderCommandPalette()"
           onkeydown="handlePaletteKey(event)"
@@ -2633,14 +2669,15 @@
 
       async function apiState() {
         try {
-          const r = await fetch(API + "/api/state");
+          const r = await fetch(API + "/api/state", {
+            signal: AbortSignal.timeout(4000),
+          });
           if (!r.ok) {
             console.error("API state request failed:", r.status);
             return null;
           }
           return await r.json();
-        } catch (err) {
-          console.error("API state error:", err);
+        } catch {
           return null;
         }
       }
@@ -2694,44 +2731,6 @@
           return false;
         } finally {
           setCommandPending(false);
-        }
-      }
-
-      async function apiSearch(query, timeoutMs = 70000, silent = false) {
-        const startedAt = Date.now();
-        try {
-          const url = API + "/api/v2/search?q=" + encodeURIComponent(query);
-          console.debug("[uxi] search start", { query, url, timeoutMs });
-          const r = await fetch(url);
-          console.debug("[uxi] search response", {
-            query,
-            status: r.status,
-            ok: r.ok,
-            ms: Date.now() - startedAt,
-          });
-          const data = await r
-            .json()
-            .catch(() => ({ ok: false, results: [], msg: "Search failed" }));
-          console.debug("[uxi] search parsed", {
-            query,
-            ok: data.ok,
-            count: (data.results || []).length,
-            msg: data.msg,
-          });
-          if (!r.ok || !data.ok) {
-            if (!silent) showToast(data.msg || "Search failed", "error");
-            return [];
-          }
-          return data.results || [];
-        } catch (err) {
-          console.error("[uxi] search error", {
-            query,
-            timeoutMs,
-            ms: Date.now() - startedAt,
-            err,
-          });
-          if (!silent) showToast("Search connection error", "error");
-          return [];
         }
       }
 
@@ -2802,9 +2801,11 @@
       let queueRowsCache = [];
       let lastQueueFilter = "";
       let lastActiveLyricIdx = -1;
+      let lastLyricsKey = "";
       const POLL_INTERVAL = 500;
       const SSE_RECONNECT_DELAY = 3000;
       let reconnectAttempts = 0;
+      let sseRetryTimer = null;
       const MAX_RECONNECT_ATTEMPTS = 10;
       let syncMode = "connecting";
 
@@ -2840,7 +2841,7 @@
             try {
               const data = JSON.parse(e.data);
               Object.assign(state, data);
-              state.alive = true;
+              state.unreachable = false;
               state.connecting = false;
               updateNowPlaying();
               const newQueueJSON =
@@ -2867,11 +2868,11 @@
             sse.close();
             sse = null;
             reconnectAttempts++;
-
+            // Poll while SSE is down so the UI never shows stale state during retries
+            fallbackToPolling();
+            clearTimeout(sseRetryTimer);
             if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-              setTimeout(connectSSE, SSE_RECONNECT_DELAY);
-            } else {
-              fallbackToPolling();
+              sseRetryTimer = setTimeout(connectSSE, SSE_RECONNECT_DELAY);
             }
           };
         } catch (err) {
@@ -2881,23 +2882,35 @@
       }
 
       function fallbackToPolling() {
-        if (syncMode === "sse") return;
         if (pollInterval) return;
         syncMode = "polling";
         pollInterval = setInterval(poll, POLL_INTERVAL);
         poll();
       }
 
+      let pollInFlight = false;
+      let lastPollAt = 0;
       async function poll() {
-        const data = await apiState();
+        // Skip overlapping polls, and back off to every 5s while the tab is hidden
+        if (pollInFlight) return;
+        if (document.hidden && Date.now() - lastPollAt < 5000) return;
+        pollInFlight = true;
+        lastPollAt = Date.now();
+        let data;
+        try {
+          data = await apiState();
+        } finally {
+          pollInFlight = false;
+        }
         if (!data) {
           state.alive = false;
-          state.connecting = !sse;
+          state.connecting = false;
+          state.unreachable = true;
           updateNowPlaying();
           return;
         }
         state.connecting = false;
-        state.alive = true;
+        state.unreachable = false;
         Object.assign(state, data);
         updateNowPlaying();
         const newQueueJSON =
@@ -2951,8 +2964,10 @@
         const metaEl = document.getElementById("track-meta");
         if (connecting && !alive) {
           metaEl.textContent = "— connecting… —";
+        } else if (state.unreachable) {
+          metaEl.textContent = "— lost connection · is mox uxi still running? —";
         } else if (!alive) {
-          metaEl.textContent = "— daemon offline —";
+          metaEl.textContent = "— player not running · search for a song to start —";
         } else if (paused) {
           metaEl.textContent =
             title && title !== "nothing playing" ? "⏸ paused" : "— idle —";
@@ -2961,6 +2976,12 @@
         }
 
         const pct = dur > 0 ? (pos / dur) * 100 : 0;
+        for (const id of ["progress-wrap", "bottom-seek"]) {
+          const seekBar = document.getElementById(id);
+          seekBar.setAttribute("aria-valuemax", Math.round(dur || 0));
+          seekBar.setAttribute("aria-valuenow", Math.round(pos || 0));
+          seekBar.setAttribute("aria-valuetext", `${fmtTime(pos)} of ${fmtTime(dur)}`);
+        }
         document.getElementById("progress-fill").style.width = pct + "%";
         document.getElementById("progress-buffer").style.width =
           (bufferPct || 0) + "%";
@@ -3012,7 +3033,7 @@
           statusLabel.textContent = "connecting…";
         } else if (!alive) {
           dot.classList.add("offline");
-          statusLabel.textContent = "offline";
+          statusLabel.textContent = state.unreachable ? "disconnected" : "player stopped";
         } else if (title && title !== "nothing playing") {
           dot.style.background = paused ? "var(--accent3)" : "var(--accent)";
           dot.style.animation = paused
@@ -3035,7 +3056,10 @@
           ? ""
           : "none";
         const likeBtn = document.getElementById("like-btn");
-        if (likeBtn) likeBtn.textContent = state.liked ? "♥" : "♡";
+        if (likeBtn) {
+          likeBtn.textContent = state.liked ? "♥" : "♡";
+          likeBtn.setAttribute("aria-pressed", state.liked ? "true" : "false");
+        }
         const autodjStatus = document.getElementById("autodj-status");
         if (autodjStatus) {
           autodjStatus.textContent = state.autoDj
@@ -3046,6 +3070,9 @@
         document
           .getElementById("autodj-toggle")
           ?.classList.toggle("active", !!state.autoDj);
+        // mpv's filter chain is the truth: follows `mox eq` from the terminal and resets after a restart
+        if (state.alive && state.eq && state.eq !== shownEq && Date.now() > eqHoldUntil)
+          applyEqPreset(state.eq);
         if (!visualizer.raf)
           visualizer.raf = requestAnimationFrame(drawVisualizer);
       }
@@ -3060,7 +3087,7 @@
         if (!queue.length) {
           queueRowsCache = [];
           el.innerHTML =
-            '<div style="color:var(--muted);font-size:12px;padding:20px 0;text-align:center;"><div style="font-size:22px;margin-bottom:8px;">♪</div><div>No tracks in queue.</div><button class="eq-btn" style="margin-top:10px" onclick="document.getElementById(\'search-input\').focus()">search</button></div>';
+            '<div style="color:var(--muted);font-size:12px;padding:20px 0;text-align:center;"><div style="font-size:22px;margin-bottom:8px;">♪</div><div>No tracks in queue.</div><button class="eq-btn" style="margin-top:10px" onclick="showTab(\'search\');document.getElementById(\'search-input\').focus()">search for music</button></div>';
           return;
         }
         queueRowsCache = queue
@@ -3101,6 +3128,19 @@
           el.addEventListener("scroll", () =>
             requestAnimationFrame(renderQueueWindow),
           );
+          el.addEventListener("keydown", (e) => {
+            const row = e.target.closest?.(".queue-item");
+            if (!row || e.target !== row) return;
+            const idx = Number(row.dataset.queueIdx);
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              playQueueItem(idx);
+            } else if (e.key === "Delete" || e.key === "Backspace") {
+              e.preventDefault();
+              removeQueueItem(idx);
+            }
+          });
           el.dataset.virtualBound = "1";
         }
       }
@@ -3119,10 +3159,10 @@
   `
           : `<span class="queue-num">${i + 1}</span>`;
         return `
-  <div class="queue-item ${active ? "active" : ""}" onclick="playQueueItem(${i})" data-queue-idx="${i}" data-real-idx="${i}" draggable="true"
+  <div class="queue-item ${active ? "active" : ""}" tabindex="0" ${active ? 'aria-current="true"' : ""} onclick="playQueueItem(${i})" data-queue-idx="${i}" data-real-idx="${i}" draggable="true"
        ondragstart="queueDragStart(event, ${i})" ondragover="queueDragOver(event)" ondragleave="queueDragLeave(event)" ondrop="queueDrop(event, ${i})" ondragend="queueDragEnd(event)">
     ${bars}
-    <img class="queue-thumb ${thumb ? "" : "empty"}" src="${thumb}" alt="">
+    <img class="queue-thumb ${thumb ? "" : "empty"}" ${thumb ? `src="${thumb}" loading="lazy"` : ""} alt="">
     <span class="queue-item-title">${title}</span>
     <button class="queue-item-remove" onclick="event.stopPropagation();removeQueueItem(${i})" title="Remove from queue" aria-label="Remove ${title}">x</button>
   </div>`;
@@ -3149,54 +3189,53 @@
           !lyrics.lines.length
         ) {
           lastActiveLyricIdx = -1;
+          let html;
           if (!state.title || state.title === "nothing playing") {
-            el.innerHTML =
+            html =
               '<div class="lyric-line active">♪ no lyrics loaded</div><div class="lyric-line">play a song to see lyrics</div>';
-          } else if (lyrics === "loading") {
-            el.innerHTML =
-              '<div class="lyric-line active">♪ fetching lyrics…</div>';
-            scheduleLyricsRefresh();
           } else if (lyrics === "not_found") {
-            el.innerHTML =
+            html =
               '<div class="lyric-line active">♪ no lyrics found</div><div class="lyric-line">try: mox lyrics</div>';
           } else {
-            el.innerHTML =
-              '<div class="lyric-line active">♪ fetching lyrics…</div>';
+            html = '<div class="lyric-line active">♪ fetching lyrics…</div>';
+          }
+          if (lyrics === "loading") scheduleLyricsRefresh();
+          if (lastLyricsKey !== html) {
+            el.innerHTML = html;
+            lastLyricsKey = html;
           }
           return;
         }
 
+        // Rebuild the DOM only when the lyrics change; on each tick just move the highlight
         const lines = lyrics.lines;
+        const key = `${state.title}|${lines.length}|${!!lyrics.synced}`;
+        if (key !== lastLyricsKey) {
+          lastLyricsKey = key;
+          lastActiveLyricIdx = -1;
+          el.innerHTML = lines
+            .map((line) => {
+              const onclick = lyrics.synced
+                ? `onclick="seekToLyric(${Number(line.t) || 0})"`
+                : "";
+              return `<div class="lyric-line" ${onclick}>${escapeHtml(line.text || "♪")}</div>`;
+            })
+            .join("");
+        }
+        if (!lyrics.synced) return;
+
         let cur = 0;
-        if (lyrics.synced) {
-          for (let i = 0; i < lines.length; i++) {
-            if (lines[i].t <= pos) cur = i;
-          }
+        for (let i = 0; i < lines.length; i++) {
+          if (lines[i].t <= pos) cur = i;
         }
-
-        el.innerHTML = lines
-          .map((line, i) => {
-            const cls = lyrics.synced
-              ? i === cur
-                ? "active"
-                : i < cur
-                  ? "past"
-                  : ""
-              : "";
-            const onclick = lyrics.synced
-              ? `onclick="seekToLyric(${line.t})"`
-              : "";
-            const text = escapeHtml(line.text || "♪");
-            return `<div class="lyric-line ${cls}" ${onclick}>${text}</div>`;
-          })
-          .join("");
-
-        if (lyrics.synced && cur !== lastActiveLyricIdx) {
-          lastActiveLyricIdx = cur;
-          const activeLine = el.querySelector(".active");
-          if (activeLine)
-            activeLine.scrollIntoView({ block: "center", behavior: "smooth" });
+        if (cur === lastActiveLyricIdx) return;
+        lastActiveLyricIdx = cur;
+        const nodes = el.children;
+        for (let i = 0; i < nodes.length; i++) {
+          nodes[i].className =
+            i === cur ? "lyric-line active" : "lyric-line";
         }
+        nodes[cur]?.scrollIntoView({ block: "center", behavior: "smooth" });
       }
 
       // ── Commands ───────────────────────────────────────────────────────────────
@@ -3267,8 +3306,8 @@
       }
 
       async function setEq(preset) {
+        eqHoldUntil = Date.now() + 2000;
         applyEqPreset(preset);
-        localStorage.setItem("mox-eq-preset", preset);
         const success = await apiCmd("eq " + preset);
         if (success) {
           showToast("🎚 eq: " + preset);
@@ -3279,7 +3318,7 @@
       const _schedules = JSON.parse(
         localStorage.getItem("mox-schedules") || "[]",
       );
-      let _sleepTimerHandle = null;
+      let _sleepTickHandle = null;
       let _sleepTimerEnd = 0;
 
       function _saveSchedules() {
@@ -3287,13 +3326,21 @@
       }
 
       function _scheduleTimeouts() {
-        // Re-arm all active schedules on page load
-        _schedules.forEach((s) => {
-          const ms = s.fireAt - Date.now();
-          if (ms > 0) {
-            s._handle = setTimeout(() => _fireSchedule(s.id), ms);
+        // Re-arm on page load. Times missed while the page was closed: daily ones
+        // roll forward to their next occurrence, one-shots are dropped.
+        const now = Date.now();
+        for (let i = _schedules.length - 1; i >= 0; i--) {
+          const s = _schedules[i];
+          if (s.fireAt <= now) {
+            if (!s.repeat) {
+              _schedules.splice(i, 1);
+              continue;
+            }
+            while (s.fireAt <= now) s.fireAt += 24 * 60 * 60 * 1000;
           }
-        });
+          s._handle = setTimeout(() => _fireSchedule(s.id), s.fireAt - now);
+        }
+        _saveSchedules();
       }
 
       async function _fireSchedule(id) {
@@ -3322,7 +3369,6 @@
         const timeEl = document.getElementById("sched-time");
         const queryEl = document.getElementById("sched-query");
         const repeat = document.getElementById("sched-repeat")?.checked;
-        const fade = document.getElementById("sched-fade")?.checked;
 
         if (!timeEl?.value) {
           showToast("⏰ pick a time first", "error");
@@ -3352,7 +3398,6 @@
           time: timeEl.value,
           fireAt: fire.getTime(),
           repeat: !!repeat,
-          fade: !!fade,
         };
         entry._handle = setTimeout(
           () => _fireSchedule(entry.id),
@@ -3401,55 +3446,42 @@
                   padding:8px 10px;background:var(--surface2);border-radius:8px;
                   margin-bottom:6px;font-size:12px;">
         <div>
-          <div style="color:var(--text);margin-bottom:2px;">${s.query}</div>
+          <div style="color:var(--text);margin-bottom:2px;">${escapeHtml(s.query)}</div>
           <div style="color:var(--muted);">⏰ ${timeStr} · ${dateStr}${s.repeat ? " · daily" : ""}</div>
         </div>
-        <button class="eq-btn" onclick="cancelSchedule(${s.id})" style="color:#ff5a5a;padding:4px 8px;font-size:11px;">✕</button>
+        <button class="eq-btn" onclick="cancelSchedule(${Number(s.id)})" aria-label="cancel schedule: ${escapeHtml(s.query)}" style="color:#ff5a5a;padding:4px 8px;font-size:11px;">✕</button>
       </div>`;
           })
           .join("");
       }
 
       async function setSleepTimer(minutes) {
-        if (_sleepTimerHandle) {
-          clearTimeout(_sleepTimerHandle);
-          _sleepTimerHandle = null;
-          _sleepTimerEnd = 0;
-        }
+        clearInterval(_sleepTickHandle);
+        _sleepTickHandle = null;
+        _sleepTimerEnd = 0;
         const status = document.getElementById("sched-status");
         if (minutes === 0) {
-          // Cancel: also tell server
           await apiCmd("sleep cancel");
           if (status) status.textContent = "sleep timer cancelled";
           showToast("⏰ sleep timer cancelled", "info");
           return;
         }
-        const ms = minutes * 60 * 1000;
-        _sleepTimerEnd = Date.now() + ms;
-        _sleepTimerHandle = setTimeout(async () => {
-          await apiCmd("pause");
-          showToast(`😴 sleep timer: paused after ${minutes}m`, "info");
-          if (status) status.textContent = "sleep triggered — paused";
-          _sleepTimerHandle = null;
-          _sleepTimerEnd = 0;
-        }, ms);
-        // Also tell the server-side mox sleep command
-        await apiCmd("sleep " + minutes);
+        // `mox sleep` stops playback server-side (even with this tab closed);
+        // the page only shows a countdown. A second client-side pause would toggle playback back on.
+        if (!(await apiCmd("sleep " + minutes))) return;
+        _sleepTimerEnd = Date.now() + minutes * 60 * 1000;
         if (status) status.textContent = `😴 sleep in ${minutes}m`;
         showToast(`😴 sleep timer: ${minutes} minutes`, "success");
-        // Live countdown
-        const tick = setInterval(() => {
-          if (!_sleepTimerEnd) {
-            clearInterval(tick);
+        _sleepTickHandle = setInterval(() => {
+          const remaining = Math.ceil((_sleepTimerEnd - Date.now()) / 60000);
+          if (remaining <= 0) {
+            clearInterval(_sleepTickHandle);
+            _sleepTickHandle = null;
+            _sleepTimerEnd = 0;
+            if (status) status.textContent = "sleep timer finished — playback stopped";
             return;
           }
-          const remaining = Math.max(
-            0,
-            Math.round((_sleepTimerEnd - Date.now()) / 60000),
-          );
-          if (status && _sleepTimerHandle)
-            status.textContent = `😴 sleep in ${remaining}m`;
-          if (!_sleepTimerHandle) clearInterval(tick);
+          if (status) status.textContent = `😴 sleep in ${remaining}m`;
         }, 30000);
       }
 
@@ -3494,16 +3526,28 @@
         });
       }
 
-      function applyEqPreset(preset) {
-        state.eq = preset;
-        // Update active button (both flat EQ buttons and preset row)
+      let shownEq = null;
+      let eqHoldUntil = 0; // ignore server EQ briefly after a click, until mpv has applied it
+      function _clearEqButtons() {
         document
           .querySelectorAll(
             '[id^="eq-flat"],[id^="eq-bass"],[id^="eq-treble"],[id^="eq-vocal"],[id^="eq-loud"]',
           )
-          .forEach((b) => b.classList.remove("active"));
+          .forEach((b) => {
+            b.classList.remove("active");
+            b.setAttribute("aria-pressed", "false");
+          });
+      }
+
+      function applyEqPreset(preset) {
+        state.eq = shownEq = preset;
+        _clearEqButtons();
+        if (preset === "custom") return;
         const btn = document.getElementById("eq-" + preset);
-        if (btn) btn.classList.add("active");
+        if (btn) {
+          btn.classList.add("active");
+          btn.setAttribute("aria-pressed", "true");
+        }
         // Sync sliders to preset values
         const gains = EQ_PRESETS[preset] || EQ_PRESETS.flat;
         _syncEqSlidersToPreset(gains);
@@ -3527,12 +3571,10 @@
         const success = await apiCmd("eq-custom " + pairs);
         if (success) {
           showToast("🎚 custom EQ applied", "success");
-          // Deactivate all presets — custom mode active
-          document
-            .querySelectorAll('[id^="eq-"]')
-            .forEach((b) => b.classList.remove("active"));
+          eqHoldUntil = Date.now() + 2000;
+          state.eq = shownEq = "custom";
+          _clearEqButtons();
           localStorage.setItem("mox-eq-custom", JSON.stringify(gains));
-          localStorage.removeItem("mox-eq-preset");
         }
       }
 
@@ -3634,6 +3676,21 @@
         }
       }
 
+      function seekKey(e) {
+        if (!state.dur) return;
+        const step = { ArrowRight: 5, ArrowUp: 5, ArrowLeft: -5, ArrowDown: -5, PageUp: 30, PageDown: -30 }[e.key];
+        let target;
+        if (step !== undefined) target = state.pos + step;
+        else if (e.key === "Home") target = 0;
+        else if (e.key === "End") target = state.dur - 1;
+        else return;
+        e.preventDefault();
+        target = Math.round(Math.max(0, Math.min(state.dur - 1, target)));
+        state.pos = target;
+        updateNowPlaying();
+        apiCmd("seek " + target);
+      }
+
       async function seekToLyric(t) {
         const success = await apiCmd("seek " + t);
         if (success) {
@@ -3669,10 +3726,27 @@
         );
       }
 
+      // Overlays return focus to whatever opened them, so keyboard users aren't dumped at the page top
+      let _overlayReturnFocus = null;
+      function _rememberFocus() {
+        _overlayReturnFocus = document.activeElement;
+      }
+      function _restoreFocus() {
+        _overlayReturnFocus?.focus?.();
+        _overlayReturnFocus = null;
+      }
+
       function toggleShortcutOverlay(e) {
         if (e && e.target !== e.currentTarget) return;
         const el = document.getElementById("shortcut-overlay");
-        el.classList.toggle("show");
+        const show = !el.classList.contains("show");
+        el.classList.toggle("show", show);
+        if (show) {
+          _rememberFocus();
+          el.querySelector(".shortcut-modal").focus();
+        } else {
+          _restoreFocus();
+        }
       }
 
       // ── Lyrics panel toggle ──────────────────────────────────────────────────────
@@ -3685,122 +3759,37 @@
       const cmdHistory = [];
       let cmdHistoryIdx = 0;
 
+      // Mirrors the server's ALLOWED_CMD_ACTIONS; anything else typed in the bar is a search
       const knownCmds = new Set([
-        "pause",
-        "pp",
-        "next",
-        "mn",
-        "prev",
-        "mb",
-        "stop",
-        "start",
-        "shuffle",
-        "repeat",
-        "rp",
-        "clear",
-        "now",
-        "bar",
-        "lyrics",
-        "art",
-        "status",
-        "like",
-        "unlike",
-        "history",
-        "queue",
-        "norm",
-        "update",
-        "doctor",
-        "vol",
-        "volume",
-        "seek",
-        "speed",
-        "autodj",
-        "repeat-one",
-        "ro",
-        "likes",
-        "love",
-        "similar",
-        "replay",
-        "rl",
-        "sleep",
-        "export",
-        "reload-config",
-        "index",
-        "local",
-        "cast",
-        "bookmark",
-        "bookmarks",
-        "bookmark-load",
-        "bl",
-        "eq",
-        "dl",
-        "dl-list",
-        "import",
-        "txt",
-        "txts",
-        "txtnext",
-        "tn",
-        "txtprev",
-        "tp",
-        "txtnow",
-        "txtpick",
-        "tj",
-        "txtedit",
-        "te",
-        "txt-export",
-        "save",
-        "load",
-        "playlists",
-        "pls",
-        "pldel",
-        "hp",
-        "sp",
-        "devices",
-        "queue-restore",
-        "qr",
-        "qmove",
-        "qrm",
-        "log",
-        "log-clear",
-        "cache-clear",
-        "cache-prune",
-        "cache-stats",
-        "scrub",
-        "slider",
-        "add-next",
-        "help",
-        "pin",
-        "pins",
-        "radio",
-        "stats",
-        "search",
-        "chapter",
-        "queue-dedup",
-        "crossfade",
-        "queue-fzf",
-        "config-edit",
-        "notify",
-        "completions",
-        "queue-save-auto",
-        "history-stats",
+        "pause", "pp", "next", "mn", "prev", "mb", "stop", "seek", "vol",
+        "volume", "speed", "repeat", "rp", "repeat-one", "ro", "shuffle",
+        "clear", "norm", "like", "autodj", "sleep", "qrm", "qmove",
       ]);
+      const MEDIA_CMDS = { play: "replace", add: "add", "add-next": "add-next" };
+      const ARG_CMDS = new Set(["seek", "vol", "speed", "eq", "sleep", "qrm", "qmove", "play", "add", "add-next"]);
 
       const COMMAND_HINTS = {
+        play: "Play a song or URL now, e.g. play daft punk",
+        add: "Add to end of queue",
+        "add-next": "Play after the current track",
         pause: "Toggle playback",
         next: "Next track",
         prev: "Previous track",
-        vol: "Set volume, e.g. vol 80",
-        seek: "Seek seconds, e.g. seek +10",
+        stop: "Stop playback",
+        vol: "Set volume, e.g. vol 80 or vol +10",
+        seek: "Seek, e.g. seek +10 or seek 90",
         eq: "Preset: flat, bass, treble, vocal, loud",
         speed: "Playback speed 0.25-4.0",
         shuffle: "Shuffle queue",
         repeat: "Toggle repeat",
         "repeat-one": "Loop current track",
         like: "Like current track",
-        lyrics: "Fetch/show lyrics",
-        qmove: "Move queue item",
-        qrm: "Remove queue item",
+        lyrics: "Show lyrics",
+        qmove: "Move queue item, e.g. qmove 3 1",
+        qrm: "Remove queue item, e.g. qrm 2",
         clear: "Clear queue",
+        norm: "Toggle loudness normalization",
+        sleep: "Stop after N minutes, e.g. sleep 30",
         autodj: "Toggle Auto-DJ",
       };
 
@@ -3852,14 +3841,22 @@
           e.target.value = "";
           hideCommandSuggestions();
 
-          const first = val.split(/\s+/)[0];
+          const first = val.split(/\s+/)[0].toLowerCase();
+          const rest = val.slice(first.length).trim();
 
           if (first === "eq") {
-            const preset = val.split(/\s+/)[1];
-            if (preset) {
-              await setEq(preset);
+            if (rest) {
+              await setEq(rest);
             } else {
               showToast("eq presets: flat bass treble vocal loud", "info");
+            }
+          } else if (first === "lyrics") {
+            toggleLyricsPanel();
+          } else if (MEDIA_CMDS[first]) {
+            if (!rest) {
+              showToast(`${first} needs a song name or URL`, "error");
+            } else if (await apiQueue(rest, MEDIA_CMDS[first])) {
+              showToast((first === "play" ? "🎵 playing: " : "➕ queued: ") + rest);
             }
           } else if (knownCmds.has(first)) {
             await cmd(val);
@@ -3951,15 +3948,14 @@
           return;
         }
         _liveSuggestTimer = setTimeout(async () => {
+          if (_searchSource) {
+            _searchSource.close();
+            _searchSource = null;
+            setSearchButtonLoading(false);
+          }
           const box = document.getElementById("search-results");
           box.innerHTML =
             '<div class="skeleton" style="height:28px;margin-bottom:4px;"></div>';
-          // Cancel any previous SSE connection for suggestions
-          if (_liveSuggestAbort) {
-            _liveSuggestAbort.abort();
-            _liveSuggestAbort = null;
-          }
-          _liveSuggestAbort = new AbortController();
           const esUrl =
             API +
             "/api/v2/search/stream?q=" +
@@ -4018,7 +4014,7 @@
         }, 250);
       }
 
-      let _searchRequestId = 0;
+      let _searchSource = null;
 
       async function runSearch() {
         const input = document.getElementById("search-input");
@@ -4026,8 +4022,9 @@
         const query = input.value.trim();
         if (!query) return;
 
-        // Cancel any live suggestions in progress
+        // Only one search stream at a time, or results from both land in one list with mixed-up indexes
         cancelLiveSuggest();
+        if (_searchSource) _searchSource.close();
 
         // Clear search results array to prevent stale index issues
         uiStore.searchResults = [];
@@ -4047,6 +4044,7 @@
             encodeURIComponent(query) +
             "&limit=20";
           const evtSrc = new EventSource(esUrl);
+          _searchSource = evtSrc;
           box.innerHTML = "";
 
           const onMessage = (e) => {
@@ -4184,9 +4182,43 @@
           showToast("Playing next: " + (item.title || item.url), "success");
       }
 
+      function initTabs() {
+        const tabs = [...document.querySelectorAll(".tab-btn")];
+        tabs.forEach((btn) => {
+          const panel = document.getElementById("panel-" + btn.dataset.tab);
+          btn.id = "tab-" + btn.dataset.tab;
+          btn.setAttribute("role", "tab");
+          if (panel) {
+            btn.setAttribute("aria-controls", panel.id);
+            panel.setAttribute("role", "tabpanel");
+            panel.setAttribute("aria-labelledby", btn.id);
+          }
+          const active = btn.classList.contains("active");
+          btn.setAttribute("aria-selected", active ? "true" : "false");
+          btn.tabIndex = active ? 0 : -1;
+        });
+        // Roving tabindex: one Tab stop for the bar, arrows move between tabs
+        document.querySelector(".tabs").addEventListener("keydown", (e) => {
+          const i = tabs.indexOf(document.activeElement);
+          if (i < 0) return;
+          let next;
+          if (e.key === "ArrowRight") next = (i + 1) % tabs.length;
+          else if (e.key === "ArrowLeft") next = (i - 1 + tabs.length) % tabs.length;
+          else if (e.key === "Home") next = 0;
+          else if (e.key === "End") next = tabs.length - 1;
+          else return;
+          e.preventDefault();
+          tabs[next].focus();
+          tabs[next].click();
+        });
+      }
+
       function showTab(name) {
         document.querySelectorAll(".tab-btn").forEach((btn) => {
-          btn.classList.toggle("active", btn.dataset.tab === name);
+          const active = btn.dataset.tab === name;
+          btn.classList.toggle("active", active);
+          btn.setAttribute("aria-selected", active ? "true" : "false");
+          btn.tabIndex = active ? 0 : -1;
         });
         document.querySelectorAll(".tab-panel").forEach((panel) => {
           panel.classList.toggle("active", panel.id === "panel-" + name);
@@ -4303,14 +4335,18 @@
         if (!success) return;
         uiStore.likesResults.splice(idx, 1);
         renderLikesList(uiStore.likesResults);
-        state.liked = false;
-        updateNowPlaying();
+        const currentUrl = state.queue[state.currentIdx]?.url || "";
+        if (currentUrl && (currentUrl.includes(item.url) || item.url.includes(currentUrl))) {
+          state.liked = false;
+          updateNowPlaying();
+        }
         showToast("unliked", "success");
       }
 
       let paletteIndex = 0;
       function openCommandPalette() {
         const palette = document.getElementById("command-palette");
+        if (!palette.classList.contains("show")) _rememberFocus();
         palette.classList.add("show");
         const input = document.getElementById("palette-input");
         input.value = "";
@@ -4322,17 +4358,23 @@
       function closeCommandPalette(event) {
         if (event && event.target !== event.currentTarget) return;
         document.getElementById("command-palette").classList.remove("show");
+        _restoreFocus();
       }
 
       function paletteItems() {
-        const commands = Array.from(knownCmds)
-          .sort()
-          .map((name) => ({
-            type: "command",
-            title: name,
-            desc: COMMAND_HINTS[name] || "Run mox " + name,
-            action: () => cmd(name),
-          }));
+        const commands = Object.keys(COMMAND_HINTS).map((name) => ({
+          type: "command",
+          title: name,
+          desc: COMMAND_HINTS[name],
+          action: () => {
+            if (name === "lyrics") return toggleLyricsPanel();
+            if (!ARG_CMDS.has(name)) return cmd(name);
+            // Needs an argument: hand off to the command bar instead of failing
+            const input = document.getElementById("cmd-input");
+            input.value = name + " ";
+            input.focus();
+          },
+        }));
         const tracks = state.queue.slice(0, 80).map((item, i) => ({
           type: "queue",
           title: item.title || "Unknown",
@@ -4377,7 +4419,7 @@
       function runPaletteItem(idx) {
         const item = uiStore.paletteResults[idx];
         const q = document.getElementById("palette-input").value.trim();
-        document.getElementById("command-palette").classList.remove("show");
+        closeCommandPalette();
         if (item) item.action();
         else if (q) apiQueue(q, "replace");
       }
@@ -4396,7 +4438,8 @@
           runPaletteItem(paletteIndex);
           e.preventDefault();
         } else if (e.key === "Escape") {
-          document.getElementById("command-palette").classList.remove("show");
+          e.stopPropagation();
+          closeCommandPalette();
         }
       }
 
@@ -4435,6 +4478,7 @@
         raf: 0,
         lastFrame: 0,
       };
+      const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)");
 
       // Seed frequencies — chosen to look natural, not perfectly periodic
       const VIZ_FREQS = [
@@ -4463,10 +4507,11 @@
           gap = 4;
         const barW = (w - gap * (bars + 1)) / bars;
         const vol = Math.min(1, (state.volume || 80) / 100); // 0-1 scale
-        const t = Date.now() / 1000;
+        const t = REDUCED_MOTION.matches ? 0 : Date.now() / 1000;
+        const idle = state.paused || !state.playing;
         for (let i = 0; i < bars; i++) {
           let value;
-          if (state.paused || !state.playing) {
+          if (idle) {
             // Flat idle breath — very subtle
             value = 0.04 + Math.abs(Math.sin(t * 0.4 + VIZ_PHASES[i])) * 0.06;
           } else {
@@ -4485,6 +4530,12 @@
           ctx.fillRect(x, h - barH - 5, barW, barH);
         }
         ctx.globalAlpha = 1;
+        // Paused or reduced motion: keep this frame and stop the 30fps loop;
+        // updateNowPlaying restarts it on the next state change
+        if (idle || REDUCED_MOTION.matches) {
+          visualizer.raf = 0;
+          return;
+        }
         visualizer.raf = requestAnimationFrame(drawVisualizer);
       }
 
@@ -4518,7 +4569,14 @@
           openCommandPalette();
           return;
         }
-        if (isInput && e.key !== "Escape" && e.key !== "?") return;
+        // Leave browser/OS shortcuts (Cmd+N, Ctrl+R, ...) alone
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (isInput && e.key !== "Escape") return;
+        // Space/arrows on a focused control belong to that control (button press, slider, tab)
+        const onControl = e.target.closest?.(
+          "button, a, select, [role='slider'], [role='tab'], [role='button']",
+        );
+        if (onControl && (e.key === " " || e.key.startsWith("Arrow") || e.key === "Enter")) return;
 
         switch (e.key) {
           case " ":
@@ -4602,10 +4660,10 @@
             break;
           case "Escape":
             document.getElementById("cmd-input").blur();
-            document
-              .getElementById("shortcut-overlay")
-              .classList.remove("show");
-            document.getElementById("command-palette").classList.remove("show");
+            if (document.getElementById("shortcut-overlay").classList.contains("show"))
+              toggleShortcutOverlay();
+            if (document.getElementById("command-palette").classList.contains("show"))
+              closeCommandPalette();
             toggleSidebar(false);
             break;
         }
@@ -4775,13 +4833,13 @@
       // ── Init ───────────────────────────────────────────────────────────────────
       initTheme();
       document.getElementById("theme-toggle").onclick = toggleTheme;
-      applyEqPreset(localStorage.getItem("mox-eq-preset") || "flat");
+      initTabs();
+      initEqSliders();
+      applyEqPreset("flat");
 
       showToast("🎵 connecting to mox daemon… press ? for shortcuts", "info");
       readShareLink(); // auto-play from URL hash if present
 
-      // ── EQ slider init ───────────────────────────────────────────────────────────
-      initEqSliders();
       // Restore custom EQ if saved
       const _savedCustomEq = localStorage.getItem("mox-eq-custom");
       if (_savedCustomEq) {

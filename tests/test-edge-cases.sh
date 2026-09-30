@@ -229,7 +229,7 @@ run_test_graceful_handling() {
     set -e
     
     # Should either succeed or fail gracefully (no crash, reasonable error message)
-    if [[ $exit_code -eq 0 ]] || [[ "$output" =~ (error|failed|not.*found|invalid|empty|usage) ]]; then
+    if [[ $exit_code -eq 0 ]] || [[ "$output" =~ (error|failed|not.*found|invalid|empty|usage|no\ valid) ]]; then
         echo -e "  ${GREEN}✅ PASS${NC} - Handled gracefully"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else

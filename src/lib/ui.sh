@@ -56,53 +56,24 @@ _clean_url() {
 
 # ── do_version ──────────────────────────────────────────────────
 _mox_version() {
-  local version=""
-  # Set by mox.sh; $0 inside a zsh function is the function name, not the script path
-  local script_dir="${_MOX_SRC_DIR:-$PWD}"
+  local version="" dir
+  # _MOX_SRC_DIR is set by mox.sh; $0 inside a zsh function is the function name, not the script path.
+  # VERSION is the source of truth (CI checks package.json matches); $(<file) reads it without forking.
+  for dir in "${MOX_PACKAGE_DIR:-}" "${MOX_LIBEXEC_DIR:-}" "${_MOX_SRC_DIR:-$PWD}/.."; do
+    [[ -n "$dir" && -f "$dir/VERSION" ]] || continue
+    version="$(<"$dir/VERSION")"; version="${version//[[:space:]]/}"
+    [[ -n "$version" ]] && break
+  done
 
-  # Priority 1: Check MOX_PACKAGE_DIR (set by npm wrapper script)
-  if [[ -n "${MOX_PACKAGE_DIR:-}" ]]; then
-    if [[ -f "$MOX_PACKAGE_DIR/package.json" ]] && command -v jq >/dev/null 2>&1; then
-      version=$(jq -r '.version // empty' "$MOX_PACKAGE_DIR/package.json" 2>/dev/null)
-    fi
-    if [[ -z "$version" && -f "$MOX_PACKAGE_DIR/VERSION" ]]; then
-      version=$(cat "$MOX_PACKAGE_DIR/VERSION" 2>/dev/null | tr -d '\n\r')
-    fi
-  fi
-
-  # Priority 2: Try package.json if we're in a development environment
-  if [[ -z "$version" ]]; then
-    local package_json_paths=(
-      "${MOX_LIBEXEC_DIR:-}/package.json"
-      "$script_dir/../package.json"
-      "$script_dir/../../package.json"
-    )
-
-    for package_file in "${package_json_paths[@]}"; do
-      if [[ -f "$package_file" ]] && command -v jq >/dev/null 2>&1; then
-        version=$(jq -r '.version // empty' "$package_file" 2>/dev/null)
-        [[ -n "$version" && "$version" != "null" ]] && break
-      fi
+  if [[ -z "$version" ]] && command -v jq >/dev/null 2>&1; then
+    for dir in "${MOX_PACKAGE_DIR:-}" "${_MOX_SRC_DIR:-$PWD}/.."; do
+      [[ -n "$dir" && -f "$dir/package.json" ]] || continue
+      version=$(jq -r '.version // empty' "$dir/package.json" 2>/dev/null)
+      [[ -n "$version" ]] && break
     done
   fi
 
-  # Priority 3: Try VERSION file
-  if [[ -z "$version" ]]; then
-    local version_paths=(
-      "${MOX_LIBEXEC_DIR:-}/VERSION"
-      "$script_dir/../VERSION"
-      "$script_dir/../../VERSION"
-    )
-
-    for version_file in "${version_paths[@]}"; do
-      if [[ -f "$version_file" ]]; then
-        version=$(cat "$version_file" 2>/dev/null | tr -d '\n\r')
-        [[ -n "$version" ]] && break
-      fi
-    done
-  fi
-
-  # Priority 4: Try git tag (development environment)
+  # Last resort: git tag (development checkout without VERSION)
   if [[ -z "$version" ]] && command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
     version=$(git describe --tags --exact-match 2>/dev/null || git describe --tags 2>/dev/null)
   fi
@@ -322,60 +293,71 @@ do_scrub() {
 }
 
 # ── do_status ───────────────────────────────────────────────────
+# ── _box_row: "  │  text   │" padded to the box's inner width ─
+# Pads by on-screen width: colour codes are ignored and wide characters count as 2.
+_box_row() {
+  setopt localoptions extendedglob
+  local inner="$1" text="$2"
+  local plain="${text//$'\e'\[[0-9;]##m/}"
+  local pad=$(( inner - 2 - ${(m)#plain} ))
+  (( pad < 1 )) && pad=1
+  printf '  │  %s%*s│\n' "$text" "$pad" ""
+}
+
 do_status() {
   # Ensure required binaries are initialized
   _ensure_bin SOCAT socat
   _ensure_bin JQ jq
 
-  if [ ! -S "$SOCKET" ]; then
+  local title paused vol speed pl_count repeat loop_one pos dur
+  if [ -S "$SOCKET" ]; then
+    # One socket round-trip; \x1f separator because read collapses runs of tabs (empty title)
+    IFS=$'\x1f' read -r title paused vol speed pl_count repeat loop_one pos dur < <(
+      _get_multi media-title pause volume speed playlist-count loop-playlist loop-file time-pos duration |
+        "$JQ" -r '[."media-title", .pause, .volume, .speed, ."playlist-count", ."loop-playlist",
+                   ."loop-file", ."time-pos", .duration] | map(if . == null then "" else tostring end)
+                  | join("\u001f")' 2>/dev/null)
+  fi
+  # No socket, or a stale one left by a crashed mpv (nothing answers)
+  if [[ -z "$paused" ]]; then
     echo ""
     echo "  ┌─────────────────────────────────────┐"
-    echo "  │  ${R}● stopped${X}                        │"
-    echo "  │  run: mox start                        │"
+    _box_row 37 "${R}● stopped${X}"
+    _box_row 37 "run: ${G}mox start${X}"
     echo "  └─────────────────────────────────────┘"
     echo ""
     return
   fi
-  local title paused vol speed
-  title=$(_get media-title)
-  paused=$(_get pause)
-  vol=$(_get volume | awk '{printf "%.0f",$1}')
-  speed=$(_get speed | awk '{printf "%.2f",$1}')
-  local pl_count
-  pl_count=$(_cmd '{"command":["get_property","playlist"]}' | "$JQ" '.data|length' 2>/dev/null)
-  local repeat; repeat=$(_get loop-playlist)
-  local loop_one; loop_one=$(_get loop-file)
+  vol=$(printf '%.0f' "${vol:-0}" 2>/dev/null); speed=$(printf '%.2f' "${speed:-1}" 2>/dev/null)
   echo ""
   echo "  ┌─────────────────────────────────────────────────────────────┐"
-  printf "  │  ${G}● running${X}   vol: %3s%%   speed: %sx   queue: %s tracks      │\n" "$vol" "$speed" "${pl_count:-0}"
+  _box_row 61 "${G}● running${X}   vol: ${vol}%   speed: ${speed}x   queue: ${pl_count:-0} tracks"
   echo "  ├─────────────────────────────────────────────────────────────┤"
 
   _txt_state_read
   if [ -n "$TXT_ACTIVE_FILE" ]; then
     _txt_read_lines "$TXT_ACTIVE_FILE"
-    printf "  │  ${C}txt:${X} %-20s  [%s/%s]                      │\n" "$(basename "$TXT_ACTIVE_FILE" .txt)" \
-      "$(( TXT_ACTIVE_IDX + 1))" "${#TXT_LINES[@]}"
+    _box_row 61 "${C}txt:${X} ${${TXT_ACTIVE_FILE:t:r}:0:30}  [$(( TXT_ACTIVE_IDX + 1 ))/${#TXT_LINES[@]}]"
   fi
 
   local timer_file="$DATA_DIR/sleep_timer_pid"
   if [[ -f "$timer_file" ]]; then
     local tpid; tpid=$(cat "$timer_file" 2>/dev/null)
-    [[ -n "$tpid" ]] && kill -0 "$tpid" 2>/dev/null && printf "  │  ${Y}⏲  sleep timer active${X}                                  │\n"
+    [[ -n "$tpid" ]] && kill -0 "$tpid" 2>/dev/null && _box_row 61 "${Y}sleep timer active${X}"
   fi
 
-  [[ -f "$AUTODJ_FILE" ]] && printf "  │  ${M}🤖 Auto-DJ active${X}                                        │\n"
-  [[ "$repeat"   != "no" && -n "$repeat"   ]] && printf "  │  ${Y}🔁 repeat-playlist${X}                                    │\n"
-  [[ "$loop_one" != "no" && -n "$loop_one" ]] && printf "  │  ${Y}🔂 repeat-one${X}                                         │\n"
+  [[ -f "$AUTODJ_FILE" ]] && _box_row 61 "${M}Auto-DJ active${X}"
+  [[ "$repeat"   != (no|false|) ]] && _box_row 61 "${Y}repeat: playlist${X}"
+  [[ "$loop_one" != (no|false|) ]] && _box_row 61 "${Y}repeat: one track${X}"
   echo "  ├─────────────────────────────────────────────────────────────┤"
   if [ -n "$title" ]; then
-    local pos dur
-    pos=$(_get time-pos | awk '{printf "%d:%02d",$1/60,$1%60}' 2>/dev/null)
-    dur=$(_get duration   | awk '{printf "%d:%02d",$1/60,$1%60}' 2>/dev/null)
+    [[ -n "$pos" ]] && pos=$(printf '%d:%02d' $(( ${pos%.*} / 60 )) $(( ${pos%.*} % 60 )))
+    [[ -n "$dur" ]] && dur=$(printf '%d:%02d' $(( ${dur%.*} / 60 )) $(( ${dur%.*} % 60 )))
     local icon="▶"; [ "$paused" = "true" ] && icon="⏸"
-    local t="${title:0:45}"
-    printf "  │  %s %-45s %s/%s │\n" "$icon" "$t" "$pos" "$dur"
+    local t="${title:0:44}"; (( ${#title} > 44 )) && t="${title:0:43}…"
+    _box_row 61 "$icon $t  ${pos:-0:00}/${dur:-?}"
   else
-    printf "  │  ${W}idle — mox \"song name\" to play${X}                          │\n"
+    _box_row 61 "${W}idle — mox \"song name\" to play${X}"
   fi
   echo "  └─────────────────────────────────────────────────────────────┘"
   echo ""
@@ -507,7 +489,8 @@ do_ui() {
   _need
 
   local session="m_ui_$$"
-  local script_path="$0"
+  # $0 inside a zsh function is the function name; the panes need a real path
+  local script_path="${_MOX_SRC_DIR}/mox.sh"
 
   tmux new-session -d -s "$session" -x "$(tput cols)" -y "$(tput lines)" 2>/dev/null || {
     _warn "could not create tmux session"; do_bar; return
@@ -547,13 +530,7 @@ do_uxi() {
   [[ ! -x "$CURL" ]] && CURL="/usr/local/bin/curl"
   [[ ! -x "$CURL" ]] && { _err "curl not found"; return 1; }
 
-  # Get script directory - handle both bash and zsh
-  local script_dir
-  if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
-    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  else
-    script_dir="$(cd "$(dirname "$0")" && pwd)"
-  fi
+  local script_dir="${_MOX_SRC_DIR:-$PWD}"
 
   # Locate music_ui_server.py
   local server_path=""
@@ -605,7 +582,7 @@ do_uxi() {
 
   # Start bridge server in background
   _info "starting uxi bridge server on port $UXI_PORT…"
-  "$py3" "$server_path" "$UXI_PORT" > "$DATA_DIR/uxi_server.log" 2>&1 &!
+  "$py3" "$server_path" "$UXI_PORT" </dev/null > "$DATA_DIR/uxi_server.log" 2>&1 &!
   local srv_pid=$!
   echo "$srv_pid" > "$UXI_PID_FILE"
 
@@ -751,7 +728,7 @@ _txt_search_and_play_line() {
   fi
 
   [ -z "$results" ] && return 1
-  url=$(echo "$results" | head -1 | awk -F ' \| ' '{print $NF}')
+  url=$(echo "$results" | head -1 | awk -F ' [|] ' '{print $NF}')
   echo "$url"
 }
 
@@ -941,19 +918,14 @@ do_doctor() {
   for bin_var in YTDLP MPV FZF SOCAT JQ CURL CHAFA FFPROBE; do
     local bin_path="${(P)bin_var}"
     if [[ -n "$bin_path" && -x "$bin_path" ]]; then
-      local ver=""
+      local ver="" flag="--version"
       case "$bin_var" in
-        YTDLP)   ver=$("$bin_path" --version 2>/dev/null | head -1) ;;
-        MPV)     ver=$("$bin_path" --version 2>/dev/null | head -1 | awk '{print $1,$2,$3}') ;;
-        FZF)     ver=$("$bin_path" --version 2>/dev/null | head -1) ;;
-        SOCAT)   ver=$("$bin_path" -V 2>&1 | head -1 | awk '{print $1,$2}') ;;
-        JQ)      ver=$("$bin_path" --version 2>/dev/null | head -1) ;;
-        CURL)    ver=$("$bin_path" --version 2>/dev/null | head -1) ;;
-        CHAFA)   ver=$("$bin_path" --version 2>/dev/null | head -1) ;;
-        FFPROBE) ver=$("$bin_path" -version 2>/dev/null | head -1) ;;
+        SOCAT)   flag="-V" ;;
+        FFPROBE) flag="-version" ;;
       esac
-      [[ ${#ver} -gt 46 ]] && ver="${ver[1,43]}..."
-      printf "  ${G}✔${X}  %-8s  %s\n" "$bin_var" "${ver:-unknown version}"
+      # Each tool formats --version differently (socat's number is on line 2); keep just the number
+      ver=$("$bin_path" "$flag" 2>&1 | head -3 | grep -oE '[0-9]+(\.[0-9]+)+' | head -1)
+      printf "  ${G}✔${X}  %-8s  %s\n" "$bin_var" "${ver:-installed}"
     else
       local optional=""
       [[ "$bin_var" == "CURL" || "$bin_var" == "CHAFA" || "$bin_var" == "FFPROBE" ]] && optional=" (optional)"
@@ -974,7 +946,7 @@ do_doctor() {
 
   echo "  ${W}Daemon:${X}"
   if [ ! -S "$SOCKET" ]; then
-    printf "  ${R}✖${X}  socket: not present  (%s)\n" "$SOCKET"
+    printf "  ${Y}–${X}  not running — start it with: ${G}mox start${X}  (socket: %s)\n" "$SOCKET"
   else
     printf "  ${G}✔${X}  socket: exists  (%s)\n" "$SOCKET"
     if echo '{"command":["get_version"]}' \
@@ -1270,9 +1242,9 @@ do_search_only() {
   echo "  ${C}search: ${query}${X}"
   echo ""
   if [[ $show_urls -eq 1 ]]; then
-    echo "$results" | awk -F ' \| ' '{printf "  %-46s %8s  %s\n", substr($1,1,46), $2, $3}' | head -30
+    echo "$results" | awk -F ' [|] ' '{t=$1; for(i=2;i<NF-1;i++) t=t" | "$i; printf "  %-46s %8s  %s\n", substr(t,1,46), $(NF-1), $NF}' | head -30
   else
-    echo "$results" | awk -F ' \| ' '{printf "  %2d. %-58s %8s\n", NR, substr($1,1,58), $2}' | head -30
+    echo "$results" | awk -F ' [|] ' '{t=$1; for(i=2;i<NF-1;i++) t=t" | "$i; printf "  %2d. %-58s %8s\n", NR, substr(t,1,58), $(NF-1)}' | head -30
     echo ""
     echo "  ${C}tip:${X} add --urls to show source links"
   fi
@@ -1401,7 +1373,8 @@ do_history_stats() {
   _check_deps
   [[ ! -s "$HISTORY_FILE" ]] && { _warn "no history yet"; return; }
   local with_counts
-  with_counts=$(awk -F'\t' '{count[$3]++; title[$3]=$2; date[$3]=$1} END{for(u in count) print count[u]"\t"date[u]"\t"title[u]"\t"u}' "$HISTORY_FILE" | sort -rn)
+  with_counts=$(awk -F'\t' 'NF>=3 && $3!="" {count[$3]++; title[$3]=$2; date[$3]=$1} END{for(u in count) print count[u]"\t"date[u]"\t"title[u]"\t"u}' "$HISTORY_FILE" | sort -rn)
+  [[ -z "$with_counts" ]] && { _warn "no history yet"; return; }
   if [[ ! -t 0 ]] || [[ -n "${MOX_TEST_MODE:-}" ]]; then
     echo ""
     echo "  ${C}history statistics${X}"
@@ -1433,7 +1406,7 @@ do_completions() {
 # mox — zsh completion
 _mox_completions() {
   local -a cmds
-  cmds=(pause next prev stop start shuffle repeat repeat-one clear now bar lyrics art ui uxi uxi-stop scrub queue qmove qrm status hp speakers devices playlists save load pldel import dl dl-list txt txts txtnext txtprev txtnow txtpick txtedit txt-export vol seek speed like unlike likes likes-play love similar smart history history-clear replay eq eq\ custom norm sleep export update doctor queue-restore log log-clear cache-clear cache-prune cache-stats autodj bookmark bookmarks bookmark-load index local scan share schedule reload-config crossfade queue-dedup pin pins queue-save-auto search radio chapter stats config-edit notify-toggle auto-restart-toggle history-stats completions help version)
+  cmds=(play add add-next pause next prev stop start restart config cast shuffle repeat repeat-one clear now bar lyrics art ui uxi uxi-stop scrub queue qmove qrm status hp speakers devices playlists save load pldel import dl dl-list txt txts txtnext txtprev txtnow txtpick txtedit txt-export vol seek speed like unlike likes likes-play love similar smart history history-clear replay eq eq\ custom norm sleep export update doctor queue-restore log log-clear cache-clear cache-prune cache-stats autodj bookmark bookmarks bookmark-load index local scan share schedule reload-config crossfade queue-dedup pin pins queue-save-auto search radio chapter stats config-edit notify-toggle auto-restart-toggle history-stats completions help version)
   _describe 'mox' cmds
 }
 compdef _mox_completions mox
@@ -1442,6 +1415,33 @@ COMPLETIONS
 
 # ── help ──────────────────────────────────────────────────────
 do_help() {
+  [[ "${1:-}" == "all" ]] && { _help_all; return; }
+  cat <<EOF
+
+  ${C}mox — terminal music CLI${X}   (v$(_mox_version))
+
+  ${W}PLAY${X}
+    mox "lofi beats"         search YouTube, pick a result, play
+    mox play <query|url>     same, explicitly (use if the query looks like a command)
+    mox add <query>          add to the queue       mox add-next <query>   play after current
+
+  ${W}CONTROL${X}
+    pause · next · prev · stop       seek +30 · seek 1:30       vol 80 · vol +
+    shuffle · repeat · queue · clear                            like · likes · history
+
+  ${W}SEE WHAT'S PLAYING${X}
+    status · bar (live) · lyrics · uxi (web UI in your browser)
+
+  ${W}WHEN SOMETHING'S WRONG${X}
+    doctor                   check dependencies and settings
+    restart                  restart the player daemon
+
+  All commands: ${G}mox help all${X}      Config: $CONFIG_FILE
+
+EOF
+}
+
+_help_all() {
   cat <<EOF
 
   ${C}mox — terminal music CLI${X}   (v$(_mox_version))
@@ -1455,7 +1455,9 @@ do_help() {
       (default: yt-dlp scrape, 2–5s)
 
   ${W}PLAY${X}
-    mox "query"              search YouTube & play (fzf picker)
+    mox "query"              search YouTube & play (fzf picker; top result when not in a terminal)
+    mox play <query|url>     same, but never treated as a command ("mox play stop")
+    mox add / add-next <q>   add to queue / play after current
     mox ~/path/to/file.mp3   play a local file directly
     mox "query" -a           add to queue (dedup-guarded)
     mox "query" -a -f        force-add (bypass dedup)
@@ -1475,6 +1477,7 @@ do_help() {
     speed + / - / r        step speed / reset to 1x
     stop                   kill daemon
     start                  start daemon
+    restart                stop + start daemon
 
   ${W}VOLUME & OUTPUT${X}
     vol / vol 80 / vol + / vol -   show/set/step volume (0-150)
@@ -1611,156 +1614,3 @@ do_help() {
 
 EOF
 }
-
-# ── main dispatch ─────────────────────────────────────────────
-if [[ "${MOX_LIB_ONLY:-}" != "1" ]]; then
-if [ $# -eq 0 ]; then
-  if [ ! -S "$SOCKET" ]; then
-    echo ""
-    echo "  ${BOLD}mox${X} — terminal music CLI"
-    echo "  run: ${G}mox help${X} for all commands"
-    echo ""
-    echo "  Quick start:"
-    echo "    ${G}mox \"lofi hip hop\"${X}    search & play"
-    echo "    ${G}mox uxi${X}                 open web UI"
-    echo ""
-  else
-    do_status
-  fi
-  exit 0
-fi
-
-case "$1" in
-  --version|-V|version) do_version;                   exit 0 ;;
-  pause|pp)            do_pause;                   exit 0 ;;
-  next|mn)             do_next;                    exit 0 ;;
-  prev|mb)             do_prev;                    exit 0 ;;
-  stop)                do_stop;                    exit 0 ;;
-  start)               do_start;                   exit 0 ;;
-  shuffle)             do_shuffle;                 exit 0 ;;
-  repeat|rp)           do_repeat;                  exit 0 ;;
-  repeat-one|ro)       do_repeat_one;              exit 0 ;;
-  clear)               do_clear;                   exit 0 ;;
-  now)                 do_now;                     exit 0 ;;
-  bar|progress)        do_bar;                     exit 0 ;;
-  lyrics)              do_lyrics;                  exit 0 ;;
-  art)                 do_art;                     exit 0 ;;
-  ui)                  do_ui;                      exit 0 ;;
-  uxi)                 do_uxi;                     exit 0 ;;
-  uxi-stop)             do_uxi_stop;                 exit 0 ;;
-  scrub|slider)        do_scrub;                   exit 0 ;;
-  queue)               do_queue;                   exit 0 ;;
-  qmove)               do_queue_move "${2:-}" "${3:-}";    exit 0 ;;
-  qrm)                 do_queue_remove "${2:-}";       exit 0 ;;
-  status)              do_status;                  exit 0 ;;
-  hp|headphones)       do_hp;                      exit 0 ;;
-  sp|speakers)         do_sp;                      exit 0 ;;
-  devices)             do_devices;                 exit 0 ;;
-  playlists|pls)       do_playlists;               exit 0 ;;
-  save)                do_save "${2:-}";           exit 0 ;;
-  load)                do_load "${2:-}";           exit 0 ;;
-  pldel)               do_playlist_del "${2:-}";   exit 0 ;;
-  import)              do_import "${2:-}";         exit 0 ;;
-  dl)                  do_dl "${2:-}";             exit 0 ;;
-  dl-list)             do_dl_list;                 exit 0 ;;
-  txt)                 do_txt "${2:-}" "${3:-}";   exit 0 ;;
-  txts)                do_txts;                    exit 0 ;;
-  txtnext|tn)          do_txtnext;                 exit 0 ;;
-  txtprev|tp)          do_txtprev;                 exit 0 ;;
-  txtnow)              do_txtnow;                  exit 0 ;;
-  txtpick|tj)          do_txtpick;                 exit 0 ;;
-  txtedit|te)          do_txtedit "${2:-}";        exit 0 ;;
-  txt-export)          do_txt_export;              exit 0 ;;
-  vol|volume)          do_vol "${2:-}";            exit 0 ;;
-  seek)                do_seek "${2:-}";           exit 0 ;;
-  speed)               do_speed "${2:-}";          exit 0 ;;
-  like)                do_like;                    exit 0 ;;
-  unlike)              do_unlike;                  exit 0 ;;
-  likes)               do_likes;                   exit 0 ;;
-  likes-play|lp)       do_likes_play;              exit 0 ;;
-  love)                do_love;                    exit 0 ;;
-  similar)             do_similar;                 exit 0 ;;
-  smart)               do_smart;                   exit 0 ;;
-  history|hist)        do_history;                 exit 0 ;;
-  history-clear)       do_history_clear;           exit 0 ;;
-  replay|rl)           do_replay;                  exit 0 ;;
-  eq)                  if [[ "${2:-}" == "custom" ]]; then do_eq_custom "$@"; else do_eq "${2:-}"; fi; exit 0 ;;
-  crossfade)            do_crossfade "${2:-}";     exit 0 ;;
-  queue-dedup)          do_queue_dedup;           exit 0 ;;
-  pin)                 do_pin "${2:-}";            exit 0 ;;
-  pins)                do_pins;                   exit 0 ;;
-  queue-save-auto)      do_queue_save_auto;       exit 0 ;;
-  search)              shift; do_search_only "$@"; exit 0 ;;
-  radio)               do_radio "${2:-}";         exit 0 ;;
-  chapter)              do_chapter;               exit 0 ;;
-  stats)               do_stats;                  exit 0 ;;
-  config-edit)         do_config_edit;           exit 0 ;;
-  notify-toggle)        do_notify_toggle;          exit 0 ;;
-  auto-restart-toggle)  do_auto_restart_toggle;     exit 0 ;;
-  history-stats)       do_history_stats;          exit 0 ;;
-  completions)         do_completions;            exit 0 ;;
-  norm)                do_norm;                    exit 0 ;;
-  sleep)               do_sleep "${2:-}";          exit 0 ;;
-  export)              do_export "${2:-}";         exit 0 ;;
-  update)              do_update;                  exit 0 ;;
-  doctor)              do_doctor;                  exit 0 ;;
-  queue-restore|qr)    do_queue_restore;           exit 0 ;;
-  log)                 do_log;                     exit 0 ;;
-  log-clear)           do_log_clear;               exit 0 ;;
-  cache-clear)         do_cache_clear;             exit 0 ;;
-  cache-prune)         do_cache_prune;             exit 0 ;;
-  cache-stats)         do_cache_stats;             exit 0 ;;
-  autodj)              do_autodj;                  exit 0 ;;
-  bookmark)            do_bookmark "${2:-}";       exit 0 ;;
-  bookmarks)           do_bookmarks;               exit 0 ;;
-  bookmark-load|bl)    do_bookmark_load;           exit 0 ;;
-  index)               do_index;                   exit 0 ;;
-  local)               do_local "${2:-}";          exit 0 ;;
-  scan)                do_scan "${2:-}" "${3:-}";  exit 0 ;;
-  share)               do_share "${2:-}";          exit 0 ;;
-  schedule)            do_schedule "${2:-}" "${3:-}"; exit 0 ;;
-  reload-config)       do_reload_config;           exit 0 ;;
-  cast)                do_cast;                    exit 0 ;;
-  help|-h|--help)      do_help;                    exit 0 ;;
-esac
-
-# ── Free-form query with optional flags ───────────────────────
-typeset -a QUERY_ARGS
-QUERY_ARGS=()
-FLAG_ADD=0
-FLAG_FORCE=0
-FLAG_NEXT=0
-FLAG_HP=0
-FLAG_SP=0
-
-for arg in "$@"; do
-  case "$arg" in
-    -a|--add)          FLAG_ADD=1 ;;
-    -f|--force)        FLAG_FORCE=1 ;;
-    -an|--add-next)    FLAG_ADD=1; FLAG_NEXT=1 ;;
-    -hp|--headphones)  FLAG_HP=1 ;;
-    -sp|--speakers)    FLAG_SP=1 ;;
-    -*)                _die "unknown flag: $arg  (run: mox help)" ;;
-    *)                 QUERY_ARGS+=("$arg") ;;
-  esac
-done
-
-[ ${#QUERY_ARGS[@]} -eq 0 ] && _die "no query — usage: mox \"song name\"  or  mox help"
-
-QUERY="${(j: :)QUERY_ARGS}"
-
-if [ $FLAG_ADD -eq 1 ]; then
-  if [ $FLAG_NEXT -eq 1 ]; then
-    do_add_next "$QUERY"
-  elif [ $FLAG_FORCE -eq 1 ]; then
-    do_add_force "$QUERY"
-  else
-    do_add "$QUERY"
-  fi
-else
-  do_play "$QUERY"
-fi
-
-[ $FLAG_HP -eq 1 ] && sleep 0.4 && do_hp
-[ $FLAG_SP -eq 1 ] && sleep 0.4 && do_sp
-fi

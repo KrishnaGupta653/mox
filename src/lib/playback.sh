@@ -384,20 +384,17 @@ do_shuffle() { _need; _silent '{"command":["playlist-shuffle"]}'; _ok "🔀 shuf
 
 
 # ── do_repeat ───────────────────────────────────────────────────
-do_repeat() {
-  _need
-  _silent '{"command":["cycle","loop-playlist"]}'
-  local state; state=$(_get loop-playlist)
-  _info "🔁 repeat: ${state}"
+# `cycle` would step no → inf → force, so a second `mox repeat` wouldn't turn it off
+_toggle_loop() {
+  local prop="$1" label="$2"
+  if [[ "$(_get "$prop")" == (no|false|) ]]; then
+    _silent "{\"command\":[\"set_property\",\"$prop\",\"inf\"]}"; _info "$label: on"
+  else
+    _silent "{\"command\":[\"set_property\",\"$prop\",\"no\"]}"; _info "$label: off"
+  fi
 }
-
-# ── do_repeat_one ───────────────────────────────────────────────
-do_repeat_one() {
-  _need
-  _silent '{"command":["cycle","loop-file"]}'
-  local state; state=$(_get loop-file)
-  _info "🔂 repeat-one: ${state}"
-}
+do_repeat()     { _need; _toggle_loop loop-playlist "🔁 repeat"; }
+do_repeat_one() { _need; _toggle_loop loop-file "🔂 repeat-one"; }
 
 # ── do_clear ────────────────────────────────────────────────────
 do_clear() { _need; _silent '{"command":["playlist-clear"]}'; _ok "🗑  queue cleared"; }
@@ -450,12 +447,13 @@ do_smart() {
   local results
   results=$(_do_search "${title} similar songs" 8) || { _err "smart search failed"; return 1; }
   local added=0
-  echo "$results" | awk -F ' \| ' '{print $NF}' | while IFS= read -r url; do
+  echo "$results" | awk -F ' [|] ' '{print $NF}' | while IFS= read -r url; do
     [[ -z "$url" ]] && continue
     _ipc_loadfile "$url" "append-play"
     added=$(( added + 1 ))
     (( added >= 3 )) && break
   done
+  (( added == 0 )) && { _warn "no related tracks found for: $title"; return 1; }
   _queue_snapshot
-  _ok "smart queue added up to 3 related tracks"
+  _ok "smart queue: added $added related track(s)"
 }
